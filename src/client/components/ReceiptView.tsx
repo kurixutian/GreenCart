@@ -1,6 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import QRCode from 'qrcode';
-import { CheckCircle2, Leaf, QrCode, Search } from './Icons';
+import {
+  CheckCircle2,
+  History,
+  Leaf,
+  Printer,
+  QrCode,
+  Search,
+  ShoppingBag,
+} from './Icons';
 import { api } from '../api';
 import { formatCurrency } from '../utils/format';
 import type { DigitalReceiptView } from '../../shared/types';
@@ -10,6 +18,8 @@ interface ReceiptViewProps {
   onSelectReceipt: (receipt: DigitalReceiptView) => void;
   recentTokens: string[];
   onNotify: (message: string, type?: 'success' | 'error') => void;
+  onBackToShop?: () => void;
+  onOpenHistory?: () => void;
 }
 
 export function ReceiptView({
@@ -17,6 +27,8 @@ export function ReceiptView({
   onSelectReceipt,
   recentTokens,
   onNotify,
+  onBackToShop,
+  onOpenHistory,
 }: ReceiptViewProps) {
   const [tokenInput, setTokenInput] = useState(activeReceipt?.qr_code ?? '');
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
@@ -32,9 +44,9 @@ export function ReceiptView({
       activeReceipt.qr_code
     )}`;
     QRCode.toDataURL(receiptUrl, {
-      width: 180,
+      width: 210,
       margin: 1,
-      color: { dark: '#1e293b', light: '#ffffff' },
+      color: { dark: '#0f172a', light: '#ffffff' },
     })
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(''));
@@ -61,14 +73,45 @@ export function ReceiptView({
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      {/* QR Token Scanner / Lookup Bar */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs print:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Digital Receipt &amp; QR Verification</h2>
             <p className="text-xs text-slate-500">
               Scan or enter an opaque receipt token (e.g. <span className="font-mono">GC-7D30B59E42A1</span>) to verify a paperless transaction.
             </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {onBackToShop && (
+              <button
+                type="button"
+                onClick={onBackToShop}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                <ShoppingBag className="h-3.5 w-3.5" />
+                Back to Catalog / POS
+              </button>
+            )}
+            {onOpenHistory && (
+              <button
+                type="button"
+                onClick={onOpenHistory}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                <History className="h-3.5 w-3.5" />
+                Purchase History
+              </button>
+            )}
+            {activeReceipt && (
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800 hover:bg-brand-100"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Print Receipt
+              </button>
+            )}
           </div>
         </div>
 
@@ -114,7 +157,6 @@ export function ReceiptView({
         )}
       </section>
 
-      {/* Receipt Display */}
       {!activeReceipt ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
           <QrCode className="mx-auto h-10 w-10 text-slate-300" />
@@ -124,15 +166,15 @@ export function ReceiptView({
           </p>
         </div>
       ) : (
-        <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-lg shadow-slate-200/50">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-slate-900 px-6 py-5 text-white">
+        <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-lg shadow-slate-200/50 print:rounded-none print:border-slate-400 print:shadow-none">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-slate-900 px-6 py-5 text-white print:bg-white print:text-slate-900">
             <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-brand-500/20 p-2.5 text-brand-400">
+              <div className="rounded-xl bg-brand-500/20 p-2.5 text-brand-400 print:border print:border-slate-300 print:bg-white print:text-brand-700">
                 <CheckCircle2 className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-brand-300">
-                  Verified Paperless Receipt
+                <p className="text-xs font-semibold uppercase tracking-wider text-brand-300 print:text-brand-700">
+                  GreenCart Paperless Receipt
                 </p>
                 <h3 className="text-lg font-bold">
                   Transaction #{activeReceipt.transaction_id}
@@ -140,10 +182,12 @@ export function ReceiptView({
               </div>
             </div>
             <div className="text-right">
-              <span className="inline-block rounded-lg bg-white/10 px-3 py-1 font-mono text-xs font-semibold tracking-wider text-brand-200">
+              <span className="inline-block rounded-lg bg-white/10 px-3 py-1 font-mono text-xs font-semibold tracking-wider text-brand-200 print:border print:border-slate-300 print:text-slate-800">
                 {activeReceipt.qr_code}
               </span>
-              <p className="mt-1 text-xs text-slate-400">{activeReceipt.receipt_date}</p>
+              <p className="mt-1 text-xs text-slate-400 print:text-slate-600">
+                {activeReceipt.receipt_date}
+              </p>
             </div>
           </div>
 
@@ -151,7 +195,7 @@ export function ReceiptView({
             <div className="space-y-5 md:col-span-8">
               <div className="grid grid-cols-2 gap-4 rounded-2xl bg-slate-50 p-4 text-xs">
                 <div>
-                  <span className="block font-medium text-slate-400">Customer</span>
+                  <span className="block font-medium text-slate-500">Customer</span>
                   <span className="mt-0.5 block text-sm font-semibold text-slate-900">
                     {activeReceipt.customer_name}
                   </span>
@@ -160,7 +204,7 @@ export function ReceiptView({
                   </span>
                 </div>
                 <div>
-                  <span className="block font-medium text-slate-400">Receipt ID</span>
+                  <span className="block font-medium text-slate-500">Receipt ID</span>
                   <span className="mt-0.5 block font-mono text-sm font-semibold text-slate-900">
                     RCPT-{activeReceipt.receipt_id}
                   </span>
@@ -188,7 +232,7 @@ export function ReceiptView({
                         <tr key={line.detail_id}>
                           <td className="px-4 py-3">
                             <p className="font-semibold text-slate-900">{line.product_name}</p>
-                            <p className="font-mono text-xs text-slate-400 tabular-nums">
+                            <p className="font-mono text-xs text-slate-500 tabular-nums">
                               {formatCurrency(line.unit_price)} each
                             </p>
                           </td>
@@ -216,21 +260,20 @@ export function ReceiptView({
               </div>
             </div>
 
-            {/* Locally Generated QR Code & Eco Impact Box */}
             <div className="flex flex-col justify-between gap-4 md:col-span-4">
               <div className="flex flex-col items-center rounded-2xl border border-slate-200 bg-slate-50 p-5 text-center">
                 {qrDataUrl ? (
                   <img
                     src={qrDataUrl}
                     alt={`QR code for receipt ${activeReceipt.qr_code}`}
-                    className="h-44 w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-xs"
+                    className="h-48 w-48 rounded-xl border border-slate-200 bg-white p-2 shadow-xs"
                   />
                 ) : (
-                  <div className="flex h-44 w-44 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400">
+                  <div className="flex h-48 w-48 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400">
                     <QrCode className="h-12 w-12" />
                   </div>
                 )}
-                <p className="mt-3 font-mono text-xs font-bold text-slate-800">
+                <p className="mt-3 break-all font-mono text-[11px] font-bold text-slate-800">
                   {activeReceipt.qr_code}
                 </p>
                 <p className="mt-1 text-[11px] text-slate-500">
@@ -249,14 +292,14 @@ export function ReceiptView({
                     <span className="mt-0.5 block font-mono text-base font-extrabold text-brand-700 tabular-nums">
                       {activeReceipt.paper_saved.toFixed(2)}
                     </span>
-                    <span className="text-[10px] text-slate-400">sheets</span>
+                    <span className="text-[10px] text-slate-500">sheets</span>
                   </div>
                   <div className="rounded-xl bg-white p-3 shadow-xs">
                     <span className="block text-[11px] text-slate-500">CO₂e Reduced</span>
                     <span className="mt-0.5 block font-mono text-base font-extrabold text-emerald-700 tabular-nums">
                       {activeReceipt.carbon_reduction.toFixed(2)}
                     </span>
-                    <span className="text-[10px] text-slate-400">grams CO₂e</span>
+                    <span className="text-[10px] text-slate-500">grams CO₂e</span>
                   </div>
                 </div>
               </div>

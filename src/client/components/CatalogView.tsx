@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import {
+  ArrowUpDown,
+  Eye,
   Leaf,
   Minus,
   PackageCheck,
@@ -17,6 +19,8 @@ import {
 } from '../utils/format';
 import { calculateEcoMetrics, type CatalogItem, type DigitalReceiptView } from '../../shared/types';
 import { api } from '../api';
+
+type SortOption = 'featured' | 'name-asc' | 'price-asc' | 'price-desc' | 'stock-desc';
 
 interface CatalogViewProps {
   catalog: CatalogItem[];
@@ -39,32 +43,57 @@ export function CatalogView({
 }: CatalogViewProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [sortBy, setSortBy] = useState<SortOption>('featured');
+  const [selectedProduct, setSelectedProduct] = useState<CatalogItem | null>(null);
+  const [confirmingCheckout, setConfirmingCheckout] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const filtered = catalog.filter((item) => {
-    const q = search.trim().toLowerCase();
-    const matchesSearch =
-      !q ||
-      item.product_name.toLowerCase().includes(q) ||
-      item.description.toLowerCase().includes(q);
-    const matchesStatus = statusFilter === 'ALL' || item.stock_status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const filtered = catalog
+    .filter((item) => {
+      const q = search.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        item.product_name.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q);
+      const matchesStatus = statusFilter === 'ALL' || item.stock_status === statusFilter;
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'name-asc':
+          return a.product_name.localeCompare(b.product_name);
+        case 'price-asc':
+          return a.price - b.price;
+        case 'price-desc':
+          return b.price - a.price;
+        case 'stock-desc':
+          return b.quantity - a.quantity;
+        default:
+          return a.product_id - b.product_id;
+      }
+    });
 
   function getCartQty(productId: number): number {
     return cart.find((c) => c.product_id === productId)?.quantity ?? 0;
   }
 
   function addToCart(item: CatalogItem) {
-    onChangeCart(mutateCart(cart, item, item.product_id, 1, onNotify));
+    setConfirmingCheckout(false);
+    const next = mutateCart(cart, item, item.product_id, 1, onNotify);
+    if (next !== cart) {
+      onChangeCart(next);
+      onNotify(`Added "${item.product_name}" to cart.`);
+    }
   }
 
   function updateCartQty(productId: number, delta: number) {
+    setConfirmingCheckout(false);
     const prod = catalog.find((p) => p.product_id === productId);
     onChangeCart(mutateCart(cart, prod, productId, delta, onNotify));
   }
 
   function removeFromCart(productId: number) {
+    setConfirmingCheckout(false);
     onChangeCart(cart.filter((c) => c.product_id !== productId));
   }
 
@@ -77,6 +106,7 @@ export function CatalogView({
         checkoutToken: crypto.randomUUID(),
       });
       onChangeCart([]);
+      setConfirmingCheckout(false);
       onCloseMobileCart();
       onNotify(`Sale #${receipt.transaction_id} completed! Paperless receipt generated.`);
       onSaleCompleted(receipt);
@@ -117,7 +147,7 @@ export function CatalogView({
           <div className="py-12 text-center">
             <ShoppingCart className="mx-auto h-9 w-9 text-slate-300" />
             <p className="mt-3 text-sm font-medium text-slate-600">Your cart is empty</p>
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-slate-500">
               Add sustainable essentials from the catalog to preview your paperless receipt savings.
             </p>
           </div>
@@ -149,8 +179,9 @@ export function CatalogView({
                   <button
                     type="button"
                     aria-label={`Increase ${product.product_name}`}
+                    disabled={quantity >= product.quantity}
                     onClick={() => updateCartQty(product.product_id, 1)}
-                    className="p-1.5 text-slate-600 hover:text-slate-900"
+                    className="p-1.5 text-slate-600 hover:text-slate-900 disabled:opacity-40"
                   >
                     <Plus className="h-3.5 w-3.5" />
                   </button>
@@ -169,12 +200,12 @@ export function CatalogView({
         )}
       </div>
 
-      <div className="border-t border-slate-200 bg-slate-50/80 p-5">
+      <div className="border-t border-slate-200 bg-slate-50/90 p-5">
         {cartDetails.length > 0 && (
           <div className="mb-4 rounded-xl border border-brand-200 bg-brand-50/80 p-3 text-xs text-brand-900">
             <div className="flex items-center gap-1.5 font-semibold text-brand-800">
               <Leaf className="h-3.5 w-3.5 text-brand-600" />
-              Estimated Paperless Impact
+              Estimated Paperless Impact (Non-monetary)
             </div>
             <p className="mt-1 tabular-nums text-brand-700">
               Saves ~<strong>{ecoPreview.paper_saved.toFixed(2)} sheets</strong> &amp; reduces{' '}
@@ -184,69 +215,112 @@ export function CatalogView({
         )}
 
         <div className="flex items-baseline justify-between">
-          <span className="text-sm font-medium text-slate-600">Estimated Total</span>
+          <span className="text-sm font-medium text-slate-600">Amount Due (Est.)</span>
           <span className="font-mono text-xl font-extrabold text-slate-900 tabular-nums">
             {formatCurrency(estimatedTotal)}
           </span>
         </div>
-        <p className="mt-1 text-[11px] text-slate-400">
+        <p className="mt-1 text-[11px] text-slate-500">
           Final prices &amp; stock are verified server-side during atomic checkout.
         </p>
 
-        <button
-          type="button"
-          disabled={cartDetails.length === 0 || submitting}
-          onClick={handleCheckout}
-          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <PackageCheck className="h-4 w-4" />
-          {submitting ? 'Processing Checkout...' : 'Checkout & Generate QR Receipt'}
-        </button>
+        {!confirmingCheckout ? (
+          <button
+            type="button"
+            disabled={cartDetails.length === 0 || submitting}
+            onClick={() => setConfirmingCheckout(true)}
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <PackageCheck className="h-4 w-4" />
+            Review &amp; Confirm Order
+          </button>
+        ) : (
+          <div className="mt-4 space-y-2 rounded-xl border border-brand-300 bg-white p-3">
+            <p className="text-xs font-semibold text-slate-800">
+              Confirm paperless checkout for {formatCurrency(estimatedTotal)}?
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => setConfirmingCheckout(false)}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => void handleCheckout()}
+                className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-bold text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                {submitting ? 'Processing...' : 'Confirm & Pay'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 
   return (
     <div className="space-y-6">
-      {/* Ogani-Inspired Storefront Banner */}
-      <section className="relative overflow-hidden rounded-3xl border border-brand-200 bg-gradient-to-r from-brand-700 via-brand-600 to-emerald-700 p-6 text-white shadow-md sm:p-8">
+      <section className="rounded-3xl border border-brand-200 bg-gradient-to-r from-brand-700 via-brand-600 to-emerald-700 p-6 text-white shadow-sm sm:p-8">
         <div className="max-w-2xl">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-brand-50">
             <Leaf className="h-3.5 w-3.5" />
-            OGANI-INSPIRED ECO STOREFRONT
+            BOTANICAL ECO MARKET
           </div>
-          <h2 className="mt-3 text-2xl font-extrabold tracking-tight sm:text-3xl">
+          <h1 className="mt-3 text-2xl font-extrabold tracking-tight sm:text-3xl">
             Sustainable Everyday Goods, Zero Paper Waste
-          </h2>
+          </h1>
           <p className="mt-2 text-sm text-brand-100">
-            Every purchase issues an instant cryptographic QR receipt and tracks estimated paper and carbon savings.
+            Browse verified stock, preview product details, and receive an instant cryptographic QR receipt at checkout.
           </p>
         </div>
       </section>
 
       <div className="grid gap-6 lg:grid-cols-12">
-        {/* Catalog Column */}
         <div className="space-y-5 lg:col-span-8">
-          <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search eco-friendly products..."
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20"
-              />
+          <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search eco-friendly products..."
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <ArrowUpDown className="h-4 w-4 text-slate-400" />
+                <select
+                  aria-label="Sort products"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortOption)}
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-700 outline-none focus:border-brand-500 focus:bg-white"
+                >
+                  <option value="featured">Featured Order</option>
+                  <option value="name-asc">Name (A–Z)</option>
+                  <option value="price-asc">Price: Low to High</option>
+                  <option value="price-desc">Price: High to Low</option>
+                  <option value="stock-desc">Highest Stock</option>
+                </select>
+              </div>
             </div>
+
             <div className="flex flex-wrap gap-1.5">
               {['ALL', 'In Stock', 'Low Stock', 'Out of Stock'].map((status) => (
                 <button
                   key={status}
                   type="button"
                   onClick={() => setStatusFilter(status)}
-                  className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
                     statusFilter === status
-                      ? 'bg-brand-600 text-white shadow-sm'
+                      ? 'bg-brand-600 text-white shadow-xs'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
@@ -279,7 +353,7 @@ export function CatalogView({
                 return (
                   <article
                     key={item.product_id}
-                    className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md"
+                    className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-xs transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md"
                   >
                     <div>
                       <div className="flex items-start justify-between gap-2">
@@ -294,17 +368,21 @@ export function CatalogView({
                           {item.stock_status} ({item.quantity})
                         </span>
                       </div>
-                      <h3 className="mt-4 text-base font-bold text-slate-900">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProduct(item)}
+                        className="mt-4 block text-left text-base font-bold text-slate-900 hover:text-brand-700"
+                      >
                         {item.product_name}
-                      </h3>
+                      </button>
                       <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-slate-500">
                         {item.description}
                       </p>
                     </div>
 
-                    <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4">
+                    <div className="mt-5 flex items-center justify-between gap-2 border-t border-slate-100 pt-4">
                       <div>
-                        <span className="block text-[11px] uppercase tracking-wider text-slate-400">
+                        <span className="block text-[11px] uppercase tracking-wider text-slate-500">
                           Price
                         </span>
                         <span className="font-mono text-lg font-extrabold text-slate-900 tabular-nums">
@@ -312,21 +390,31 @@ export function CatalogView({
                         </span>
                       </div>
 
-                      <button
-                        type="button"
-                        disabled={outOfStock || maxedOut}
-                        onClick={() => addToCart(item)}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        {outOfStock
-                          ? 'Unavailable'
-                          : maxedOut
-                            ? `Max in Cart (${inCartQty})`
-                            : inCartQty > 0
-                              ? `Add (${inCartQty} in cart)`
-                              : 'Add to Cart'}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProduct(item)}
+                          aria-label={`View details for ${item.product_name}`}
+                          className="rounded-xl border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={outOfStock || maxedOut}
+                          onClick={() => addToCart(item)}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          {outOfStock
+                            ? 'Unavailable'
+                            : maxedOut
+                              ? `Max (${inCartQty})`
+                              : inCartQty > 0
+                                ? `Add (${inCartQty})`
+                                : 'Add to Cart'}
+                        </button>
+                      </div>
                     </div>
                   </article>
                 );
@@ -335,7 +423,6 @@ export function CatalogView({
           )}
         </div>
 
-        {/* Desktop Sticky Cart Panel */}
         <aside className="hidden lg:col-span-4 lg:block">
           <div className="sticky top-24 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             {cartPanelBody}
@@ -343,15 +430,70 @@ export function CatalogView({
         </aside>
       </div>
 
-      {/* Mobile Slide-Over Cart Drawer */}
+      {/* Product Detail Modal */}
+      {selectedProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${getStockBadgeClasses(
+                  selectedProduct.stock_status
+                )}`}
+              >
+                {selectedProduct.stock_status} · {selectedProduct.quantity} left
+              </span>
+              <button
+                type="button"
+                aria-label="Close product details"
+                onClick={() => setSelectedProduct(null)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <h3 className="mt-4 text-xl font-extrabold text-slate-900">
+              {selectedProduct.product_name}
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              {selectedProduct.description}
+            </p>
+            <div className="mt-5 rounded-2xl border border-brand-200 bg-brand-50/70 p-3.5 text-xs text-brand-900">
+              Paperless checkout issues a digital QR receipt and avoids thermal paper waste (estimate).
+            </div>
+            <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4">
+              <span className="font-mono text-2xl font-extrabold text-slate-900 tabular-nums">
+                {formatCurrency(selectedProduct.price)}
+              </span>
+              <button
+                type="button"
+                disabled={
+                  selectedProduct.quantity <= 0 ||
+                  getCartQty(selectedProduct.product_id) >= selectedProduct.quantity
+                }
+                onClick={() => {
+                  addToCart(selectedProduct);
+                  setSelectedProduct(null);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-500"
+              >
+                <Plus className="h-4 w-4" />
+                Add to Cart
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Bottom-Sheet Cart */}
       {mobileCartOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/45 backdrop-blur-xs lg:hidden">
-          <div className="relative flex h-full w-full max-w-sm flex-col bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 backdrop-blur-xs lg:hidden">
+          <div className="relative flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl">
+            <div className="mx-auto mt-2.5 h-1.5 w-12 rounded-full bg-slate-300" />
             <button
               type="button"
               aria-label="Close Cart"
               onClick={onCloseMobileCart}
-              className="absolute right-4 top-4 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              className="absolute right-4 top-3.5 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
             >
               <X className="h-5 w-5" />
             </button>

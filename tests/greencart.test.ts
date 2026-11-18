@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { DatabaseSync } from 'node:sqlite';
 import QRCode from 'qrcode';
 import { openDatabase } from '../src/server/db.ts';
+import { signSessionToken, verifySessionToken } from '../src/server/crypto.ts';
 import { AppError, GreenCartService } from '../src/server/service.ts';
 import { createApiMiddleware } from '../src/server/apiPlugin.ts';
 
@@ -163,7 +164,7 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     });
 
     expect(customerReceipt.total_amount).toBe(510.0); // (145 * 2) + 220
-    expect(customerReceipt.qr_code).toMatch(/^GC-[A-F0-9]{12}$/);
+    expect(customerReceipt.qr_code).toMatch(/^GC-[A-F0-9]{32}$/);
     expect(customerReceipt.paper_saved).toBe(1.5); // 1.0 + 2 * 0.25
     expect(customerReceipt.carbon_reduction).toBe(5.25); // 1.5 * 3.5
 
@@ -313,5 +314,14 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
       },
     });
     expect(okSaleRes.statusCode).toBe(201);
+  });
+
+  it('rejects expired signed session tokens', () => {
+    const maria = service.login('maria_santos', 'customer123');
+    const validToken = signSessionToken(maria, 'unit-secret', 60_000);
+    expect(verifySessionToken(validToken, 'unit-secret')?.username).toBe('maria_santos');
+
+    const expiredToken = signSessionToken(maria, 'unit-secret', -1000);
+    expect(verifySessionToken(expiredToken, 'unit-secret')).toBeNull();
   });
 });

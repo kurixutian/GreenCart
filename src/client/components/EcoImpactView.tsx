@@ -17,6 +17,10 @@ export function EcoImpactView({
   onChangeScope,
   onInspectToken,
 }: EcoImpactViewProps) {
+  const paperSaved = summary?.total_paper_saved ?? 0;
+  const nextMilestone = paperSaved < 10 ? 10 : paperSaved < 25 ? 25 : paperSaved < 50 ? 50 : 100;
+  const progressPct = Math.min(100, Math.round((paperSaved / nextMilestone) * 100));
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -104,6 +108,24 @@ export function EcoImpactView({
             {summary ? summary.paperless_count : 0}
           </p>
           <p className="mt-1 text-xs text-slate-500">QR-backed digital receipts issued</p>
+        </div>
+      </div>
+
+      {/* Cumulative Impact Progress Indicator */}
+      <div className="rounded-2xl border border-brand-200 bg-white p-5 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="font-bold text-slate-800">
+            Cumulative Paper-Saving Milestone ({summary?.scope === 'store' ? 'Store-Wide' : 'Personal'} Estimate)
+          </span>
+          <span className="font-mono font-semibold text-brand-700 tabular-nums">
+            {paperSaved.toFixed(2)} / {nextMilestone} sheets ({progressPct}%)
+          </span>
+        </div>
+        <div className="mt-2.5 h-3 w-full overflow-hidden rounded-full bg-brand-100">
+          <div
+            className="h-full rounded-full bg-brand-600 transition-all duration-300"
+            style={{ width: `${progressPct}%` }}
+          />
         </div>
       </div>
 

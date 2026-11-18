@@ -48,3 +48,8 @@ export const Trash2 = (p: IconProps) => svg(['M3 6h18', 'M19 6v14c0 1-1 2-2 2H7c
 export const UserCheck = (p: IconProps) => svg(['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z', 'm16 11 2 2 4-4'], p);
 export const UserPlus = (p: IconProps) => svg(['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z', 'M19 8v6', 'M22 11h-6'], p);
 export const X = (p: IconProps) => svg(['M18 6 6 18', 'm6 6 12 12'], p);
+export const LayoutGrid = (p: IconProps) => svg(['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z'], p);
+export const Printer = (p: IconProps) => svg(['M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2', 'M6 9V3h12v6', 'M6 14h12v7H6z'], p);
+export const AlertTriangle = (p: IconProps) => svg(['m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z', 'M12 9v4', 'M12 17h.01'], p);
+export const ArrowUpDown = (p: IconProps) => svg(['m21 16-4 4-4-4', 'M17 20V4', 'm3 8 4-4 4 4', 'M7 4v16'], p);
+export const Eye = (p: IconProps) => svg(['M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'], p);

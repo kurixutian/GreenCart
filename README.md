@@ -26,5 +26,6 @@ npm run build
 ## Architecture & MCP
 - **Database:** `db/schema.sql`, `db/seed.sql`, `src/server/db.ts` (`data/greencart.sqlite`)
 - **Business Logic & API:** `src/server/service.ts`, `src/server/apiPlugin.ts`
-- **Client UI:** `src/client/*` with React 19, Tailwind CSS v4, `lucide-react`, and local `qrcode` generation
-- **MCP Config:** `.mcp.json` (filesystem + SQLite inspection)
+- **Client UI:** `src/client/*` with React 19, Tailwind CSS v4, inline SVG icons (`Icons.tsx`), and local `qrcode` generation
+- **MCP Config (`.mcp.json`):** Configured for `filesystem`, `sqlite`, and `playwright` (`@playwright/mcp@latest`). Replace `/home/kurixutian/projects/GreenCart` with your own local repository path when cloning on another machine.
+- **Browser & Accessibility QA:** `@playwright/test`, `@axe-core/playwright`, and `@lhci/cli` are installed in `devDependencies`.

@@ -26,18 +26,26 @@ export function verifyPassword(password: string, storedHash: string): boolean {
   return crypto.timingSafeEqual(actualBuf, expectedBuf);
 }
 
+const DEFAULT_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+
 export function generateOpaqueReceiptToken(): string {
-  const hex = crypto.randomBytes(6).toString('hex').toUpperCase();
+  const hex = crypto.randomBytes(16).toString('hex').toUpperCase();
   return `GC-${hex}`;
 }
 
-export function signSessionToken(user: SafeUser, secret: string): string {
+export function signSessionToken(
+  user: SafeUser,
+  secret: string,
+  ttlMs: number = DEFAULT_SESSION_TTL_MS
+): string {
+  const now = Date.now();
   const payloadJson = JSON.stringify({
     account_id: user.account_id,
     username: user.username,
     account_type: user.account_type,
     full_name: user.full_name,
-    iat: Date.now(),
+    iat: now,
+    exp: now + ttlMs,
   });
   const payloadB64 = Buffer.from(payloadJson, 'utf8').toString('base64url');
   const signature = crypto
@@ -66,12 +74,16 @@ export function verifySessionToken(token: string, secret: string): SafeUser | nu
   }
 
   try {
-    const parsed = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as SafeUser;
+    const parsed = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as SafeUser & {
+      exp?: unknown;
+    };
     if (
       typeof parsed.account_id !== 'number' ||
       typeof parsed.username !== 'string' ||
       (parsed.account_type !== 'customer' && parsed.account_type !== 'admin') ||
-      typeof parsed.full_name !== 'string'
+      typeof parsed.full_name !== 'string' ||
+      typeof parsed.exp !== 'number' ||
+      Date.now() > parsed.exp
     ) {
       return null;
     }

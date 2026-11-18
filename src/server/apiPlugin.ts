@@ -9,9 +9,22 @@ import type { EcoScope, SafeUser, SaleRequestPayload } from '../shared/types.ts'
 
 const SESSION_COOKIE = 'gc_session';
 const CSRF_COOKIE = 'gc_csrf';
-const DEFAULT_SECRET =
-  process.env.GREENCART_SESSION_SECRET ||
-  'greencart-local-dev-secret-change-in-production-2026';
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+function resolveSessionSecret(): string {
+  const configured = process.env.GREENCART_SESSION_SECRET;
+  if (configured && configured.length >= 16) {
+    return configured;
+  }
+  if (IS_PROD) {
+    throw new Error(
+      'GREENCART_SESSION_SECRET (min 16 chars) must be set when NODE_ENV=production.'
+    );
+  }
+  return 'greencart-local-dev-secret-change-in-production-2026';
+}
+
+const COOKIE_SECURITY = IS_PROD ? '; Secure' : '';
 
 function parseCookies(cookieHeader: string | undefined): Record<string, string> {
   const result: Record<string, string> = {};
@@ -71,7 +84,7 @@ function sendJson(
 
 export function createApiMiddleware(
   db: DatabaseSync,
-  secret: string = DEFAULT_SECRET
+  secret: string = resolveSessionSecret()
 ): Connect.NextHandleFunction {
   const service = new GreenCartService(db);
 
@@ -125,8 +138,8 @@ export function createApiMiddleware(
         const token = signSessionToken(user, secret);
         const csrfToken = createCsrfToken(token, secret);
         sendJson(res, 200, { user, csrfToken }, [
-          `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax`,
-          `${CSRF_COOKIE}=${encodeURIComponent(csrfToken)}; Path=/; SameSite=Lax`,
+          `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax${COOKIE_SECURITY}`,
+          `${CSRF_COOKIE}=${encodeURIComponent(csrfToken)}; Path=/; SameSite=Lax${COOKIE_SECURITY}`,
         ]);
         return;
       }
@@ -148,8 +161,8 @@ export function createApiMiddleware(
         const token = signSessionToken(user, secret);
         const csrfToken = createCsrfToken(token, secret);
         sendJson(res, 201, { user, csrfToken }, [
-          `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax`,
-          `${CSRF_COOKIE}=${encodeURIComponent(csrfToken)}; Path=/; SameSite=Lax`,
+          `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax${COOKIE_SECURITY}`,
+          `${CSRF_COOKIE}=${encodeURIComponent(csrfToken)}; Path=/; SameSite=Lax${COOKIE_SECURITY}`,
         ]);
         return;
       }

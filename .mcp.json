@@ -15,6 +15,13 @@
         "mcp-sqlite",
         "/home/kurixutian/projects/GreenCart/data/greencart.sqlite"
       ]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ]
     }
   }
 }
