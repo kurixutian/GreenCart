@@ -1,0 +1,189 @@
+import { CloudOff, FileCheck2, Info, Leaf, QrCode, ScrollText } from './Icons';
+import { formatCurrency } from '../utils/format';
+import type { AccountType, EcoImpactSummary, EcoScope } from '../../shared/types';
+
+interface EcoImpactViewProps {
+  summary: EcoImpactSummary | null;
+  scope: EcoScope;
+  accountType: AccountType;
+  onChangeScope: (scope: EcoScope) => void;
+  onInspectToken: (qrCode: string) => void;
+}
+
+export function EcoImpactView({
+  summary,
+  scope,
+  accountType,
+  onChangeScope,
+  onInspectToken,
+}: EcoImpactViewProps) {
+  return (
+    <div className="mx-auto max-w-5xl space-y-6">
+      <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-brand-100 p-3 text-brand-700">
+            <Leaf className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-xl font-extrabold text-slate-900">Eco-Impact Dashboard</h2>
+            <p className="text-xs text-slate-500">
+              Reconciled from persisted <span className="font-mono">eco_impact</span> and{' '}
+              <span className="font-mono">digital_receipts</span> records.
+            </p>
+          </div>
+        </div>
+
+        {accountType === 'customer' ? (
+          <div className="inline-flex rounded-xl bg-slate-100 p-1">
+            <button
+              type="button"
+              onClick={() => onChangeScope('personal')}
+              className={`rounded-lg px-4 py-1.5 text-xs font-semibold transition ${
+                scope === 'personal'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              My Personal Impact
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeScope('store')}
+              className={`rounded-lg px-4 py-1.5 text-xs font-semibold transition ${
+                scope === 'store'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Store-Wide Totals
+            </button>
+          </div>
+        ) : (
+          <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 border border-brand-200">
+            Scope: Store-Wide Totals
+          </span>
+        )}
+      </div>
+
+      {/* Three Core Wireframe Metric Cards */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="rounded-2xl border border-brand-200 bg-gradient-to-br from-white to-brand-50/70 p-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-brand-700">
+              Paper Saved (Estimate)
+            </span>
+            <ScrollText className="h-5 w-5 text-brand-600" />
+          </div>
+          <p className="mt-3 font-mono text-3xl font-extrabold text-slate-900 tabular-nums">
+            {summary ? summary.total_paper_saved.toFixed(2) : '0.00'}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">thermal receipt sheets avoided</p>
+        </div>
+
+        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-white to-emerald-50/70 p-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">
+              Carbon Reduction (Estimate)
+            </span>
+            <CloudOff className="h-5 w-5 text-emerald-600" />
+          </div>
+          <p className="mt-3 font-mono text-3xl font-extrabold text-slate-900 tabular-nums">
+            {summary ? summary.total_carbon_reduction.toFixed(2) : '0.00'}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">grams CO₂e estimated avoided</p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
+              Paperless Transactions
+            </span>
+            <FileCheck2 className="h-5 w-5 text-slate-600" />
+          </div>
+          <p className="mt-3 font-mono text-3xl font-extrabold text-slate-900 tabular-nums">
+            {summary ? summary.paperless_count : 0}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">QR-backed digital receipts issued</p>
+        </div>
+      </div>
+
+      {/* Formula Disclosure Banner */}
+      <div className="flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50/80 p-4 text-xs text-sky-900">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
+        <div>
+          <p className="font-semibold">Documented Estimation Methodology</p>
+          <p className="mt-0.5 text-sky-800">
+            {summary?.formula_note ??
+              'Estimated impact: 1.00 base receipt sheet + 0.25 sheets per distinct line item; 3.50 g CO2e avoided per thermal sheet saved.'}{' '}
+            Figures are project estimates derived from persisted database records, not laboratory emission measurements.
+          </p>
+        </div>
+      </div>
+
+      {/* Transaction Ledger */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 px-5 py-4">
+          <h3 className="text-sm font-bold text-slate-900">
+            Eco-Impact Transaction Breakdown ({summary?.scope === 'store' ? 'Store-Wide' : 'Personal'})
+          </h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+              <tr>
+                <th className="px-5 py-3">Transaction</th>
+                <th className="px-4 py-3">Customer</th>
+                <th className="px-4 py-3">Date</th>
+                <th className="px-4 py-3 text-right">Amount</th>
+                <th className="px-4 py-3 text-right">Paper Saved</th>
+                <th className="px-5 py-3 text-right">CO₂e Reduced</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {!summary || summary.ledger.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-8 text-center text-xs text-slate-500">
+                    No Eco-Impact records found for this scope yet.
+                  </td>
+                </tr>
+              ) : (
+                summary.ledger.map((row) => (
+                  <tr key={row.transaction_id} className="hover:bg-slate-50/70">
+                    <td className="px-5 py-3.5">
+                      <span className="font-mono font-semibold text-slate-900">
+                        #{row.transaction_id}
+                      </span>
+                      {accountType === 'admin' && (
+                        <button
+                          type="button"
+                          onClick={() => onInspectToken(row.qr_code)}
+                          className="ml-2 inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 hover:bg-brand-100 hover:text-brand-800"
+                        >
+                          <QrCode className="h-3 w-3" />
+                          {row.qr_code}
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-xs font-medium text-slate-700">
+                      {row.customer_name}
+                    </td>
+                    <td className="px-4 py-3.5 text-xs text-slate-500">{row.transaction_date}</td>
+                    <td className="px-4 py-3.5 text-right font-mono text-xs font-semibold tabular-nums">
+                      {formatCurrency(row.total_amount)}
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono text-xs font-semibold text-brand-700 tabular-nums">
+                      {row.paper_saved.toFixed(2)} sh
+                    </td>
+                    <td className="px-5 py-3.5 text-right font-mono text-xs font-semibold text-emerald-700 tabular-nums">
+                      {row.carbon_reduction.toFixed(2)} g
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}

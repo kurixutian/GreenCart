@@ -1,0 +1,323 @@
+import { useState, type FormEvent } from 'react';
+import { Boxes, Edit3, Plus, Search, X } from './Icons';
+import { api } from '../api';
+import { formatCurrency, getStockBadgeClasses } from '../utils/format';
+import type { CatalogItem } from '../../shared/types';
+
+interface InventoryViewProps {
+  catalog: CatalogItem[];
+  onRefresh: () => Promise<void>;
+  onNotify: (message: string, type?: 'success' | 'error') => void;
+}
+
+export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewProps) {
+  const [search, setSearch] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
+  const [nameInput, setNameInput] = useState('');
+  const [descInput, setDescInput] = useState('');
+  const [priceInput, setPriceInput] = useState('');
+  const [qtyInput, setQtyInput] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const filtered = catalog.filter((item) => {
+    const q = search.trim().toLowerCase();
+    return (
+      !q ||
+      item.product_name.toLowerCase().includes(q) ||
+      item.description.toLowerCase().includes(q)
+    );
+  });
+
+  const inStockCount = catalog.filter((i) => i.stock_status === 'In Stock').length;
+  const lowStockCount = catalog.filter((i) => i.stock_status === 'Low Stock').length;
+  const outStockCount = catalog.filter((i) => i.stock_status === 'Out of Stock').length;
+
+  function openAddModal() {
+    setEditingItem(null);
+    setNameInput('');
+    setDescInput('');
+    setPriceInput('');
+    setQtyInput('15');
+    setModalOpen(true);
+  }
+
+  function openEditModal(item: CatalogItem) {
+    setEditingItem(item);
+    setNameInput(item.product_name);
+    setDescInput(item.description);
+    setPriceInput(String(item.price));
+    setQtyInput(String(item.quantity));
+    setModalOpen(true);
+  }
+
+  async function handleAdjust(productId: number, delta: number) {
+    try {
+      await api.adjustStock(productId, delta);
+      await onRefresh();
+      onNotify(`Stock updated (${delta > 0 ? `+${delta}` : delta}).`);
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : 'Stock adjustment failed.', 'error');
+    }
+  }
+
+  async function handleSaveProduct(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const payload = {
+        product_name: nameInput,
+        description: descInput,
+        price: Number(priceInput),
+        quantity: Number(qtyInput),
+      };
+      if (editingItem) {
+        await api.updateProduct(editingItem.product_id, payload);
+        onNotify(`Updated "${nameInput}".`);
+      } else {
+        await api.createProduct(payload);
+        onNotify(`Added "${nameInput}" to catalog & inventory.`);
+      }
+      setModalOpen(false);
+      await onRefresh();
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : 'Failed to save product.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-brand-50 p-2.5 text-brand-600">
+            <Boxes className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Inventory &amp; Catalog Management</h2>
+            <p className="text-xs text-slate-500">
+              Manage baseline <span className="font-mono">products</span> and synchronized{' '}
+              <span className="font-mono">inventory</span> levels.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={openAddModal}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-brand-700"
+        >
+          <Plus className="h-4 w-4" />
+          Add New Product
+        </button>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+          <span className="text-xs font-medium text-slate-500">Total SKUs</span>
+          <p className="mt-1 font-mono text-2xl font-extrabold text-slate-900">{catalog.length}</p>
+        </div>
+        <div className="rounded-2xl border border-brand-200 bg-brand-50/50 p-4 shadow-xs">
+          <span className="text-xs font-medium text-brand-700">In Stock (&gt;10)</span>
+          <p className="mt-1 font-mono text-2xl font-extrabold text-brand-800">{inStockCount}</p>
+        </div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 shadow-xs">
+          <span className="text-xs font-medium text-amber-700">Low Stock (1–10)</span>
+          <p className="mt-1 font-mono text-2xl font-extrabold text-amber-800">{lowStockCount}</p>
+        </div>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50/60 p-4 shadow-xs">
+          <span className="text-xs font-medium text-rose-700">Out of Stock (0)</span>
+          <p className="mt-1 font-mono text-2xl font-extrabold text-rose-800">{outStockCount}</p>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 p-4">
+          <div className="relative max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filter inventory items..."
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand-500 focus:bg-white"
+            />
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="px-5 py-3">Product</th>
+                <th className="px-4 py-3 text-right">Price</th>
+                <th className="px-4 py-3 text-right">Stock Qty</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-5 py-3 text-right">Quick Adjust &amp; Edit</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.map((item) => (
+                <tr key={item.product_id} className="hover:bg-slate-50/70">
+                  <td className="px-5 py-3.5">
+                    <p className="font-semibold text-slate-900">{item.product_name}</p>
+                    <p className="mt-0.5 line-clamp-1 max-w-md text-xs text-slate-500">
+                      {item.description}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3.5 text-right font-mono font-semibold text-slate-900 tabular-nums">
+                    {formatCurrency(item.price)}
+                  </td>
+                  <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900 tabular-nums">
+                    {item.quantity}
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <span
+                      className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${getStockBadgeClasses(
+                        item.stock_status
+                      )}`}
+                    >
+                      {item.stock_status}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5 text-right">
+                    <div className="inline-flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={item.quantity <= 0}
+                        onClick={() => void handleAdjust(item.product_id, -1)}
+                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-mono text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                      >
+                        -1
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleAdjust(item.product_id, 1)}
+                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-mono text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                      >
+                        +1
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleAdjust(item.product_id, 10)}
+                        className="rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 font-mono text-xs font-semibold text-brand-700 hover:bg-brand-100"
+                      >
+                        +10
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(item)}
+                        className="ml-1 inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                      >
+                        <Edit3 className="h-3.5 w-3.5" />
+                        Edit
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Add / Edit Modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-lg font-bold text-slate-900">
+                {editingItem ? `Edit Product #${editingItem.product_id}` : 'Add New Product'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProduct} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  Product Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  Description
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={descInput}
+                  onChange={(e) => setDescInput(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
+                    Price (PHP)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    value={priceInput}
+                    onChange={(e) => setPriceInput(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
+                    Stock Quantity
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    required
+                    value={qtyInput}
+                    onChange={(e) => setQtyInput(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                >
+                  {saving ? 'Saving...' : editingItem ? 'Save Changes' : 'Create Product'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

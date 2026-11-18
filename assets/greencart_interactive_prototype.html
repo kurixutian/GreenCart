@@ -1,0 +1,2607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GreenCart — Eco-Friendly Shopping & Paperless POS Prototype</title>
+  <!-- Tailwind CSS for responsive layout and design tokens -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono for crisp typography and tabular figures -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f4f9ee',
+              100: '#e6f2d8',
+              200: '#cde5b3',
+              300: '#acd285',
+              400: '#8ec05b',
+              500: '#7fad39', // Ogani-inspired fresh leaf green
+              600: '#638b29',
+              700: '#4c6b22',
+              800: '#3e561f',
+              900: '#35491e',
+            },
+            surface: {
+              50: '#f8faf7',
+              100: '#f1f5ef',
+              200: '#e3eae0',
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background-color: #f8faf7;
+      color: #1e293b;
+      overflow-x: hidden;
+    }
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+    /* Custom subtle scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5ef;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    /* Print styling for Digital Receipt */
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #printable-receipt-area, #printable-receipt-area * {
+        visibility: visible;
+      }
+      #printable-receipt-area {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 100%;
+        box-shadow: none !important;
+        border: none !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-brand-100 selection:text-brand-900">
+
+  <!-- ===================================================================== -->
+  <!-- TOP NAVIGATION BAR (Visible when authenticated)                       -->
+  <!-- ===================================================================== -->
+  <header id="app-header" class="hidden sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200/80 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16 gap-3">
+        <!-- Brand Logo -->
+        <div class="flex items-center gap-3">
+          <button onclick="navigateDefault()" class="flex items-center gap-2.5 text-left group focus:outline-none">
+            <div class="w-10 h-10 rounded-xl bg-brand-500 text-white flex items-center justify-center shadow-sm group-hover:bg-brand-600 transition-colors">
+              <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/>
+                <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
+              </svg>
+            </div>
+            <div>
+              <span class="text-lg font-extrabold tracking-tight text-slate-900 block leading-none">Green<span class="text-brand-500">Cart</span></span>
+              <span id="portal-role-badge" class="text-[11px] font-semibold uppercase tracking-wider text-brand-700 bg-brand-100 px-1.5 py-0.5 rounded mt-1 inline-block">Customer Portal</span>
+            </div>
+          </button>
+        </div>
+
+        <!-- Desktop Navigation Tabs (Role-Scoped) -->
+        <nav id="desktop-nav" class="hidden md:flex items-center gap-1.5" aria-label="Primary Navigation">
+          <!-- Populated dynamically based on account_type ('customer' vs 'admin') -->
+        </nav>
+
+        <!-- Right Utility Actions -->
+        <div class="flex items-center gap-2 sm:gap-3">
+          <!-- Customer Mobile/Quick Cart Button -->
+          <button id="header-cart-btn" onclick="toggleMobileCart(true)" class="hidden relative p-2.5 rounded-xl bg-brand-50 text-brand-700 hover:bg-brand-100 transition-colors" title="Open Shopping Cart">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+              <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+            </svg>
+            <span id="header-cart-badge" class="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-brand-600 text-white text-[11px] font-bold flex items-center justify-center tabular-nums">0</span>
+          </button>
+
+          <!-- 7-Entity Relational DB Inspector Button -->
+          <button onclick="openSchemaInspector()" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors" title="Inspect live 7-entity relational store">
+            <svg class="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+            </svg>
+            <span>7-Entity DB</span>
+          </button>
+
+          <!-- Current User Pill & Logout -->
+          <div class="flex items-center gap-2 pl-2 border-l border-slate-200">
+            <div class="hidden lg:block text-right">
+              <p id="header-user-name" class="text-xs font-bold text-slate-800 leading-tight">Maria Santos</p>
+              <p id="header-user-handle" class="text-[11px] text-slate-500 font-mono">@maria_santos</p>
+            </div>
+            <button onclick="logoutUser()" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors" title="Sign out">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+              <span class="hidden sm:inline">Sign Out</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Navigation Strip -->
+      <nav id="mobile-nav" class="flex md:hidden items-center gap-1.5 pb-3 overflow-x-auto" aria-label="Mobile Navigation">
+        <!-- Populated dynamically -->
+      </nav>
+    </div>
+  </header>
+
+  <!-- ===================================================================== -->
+  <!-- MAIN VIEWPORT CONTAINER                                               -->
+  <!-- ===================================================================== -->
+  <main class="flex-1 w-full">
+
+    <!-- ------------------------------------------------------------------- -->
+    <!-- VIEW 1: LOGIN / REGISTER (Wireframe Screen 1)                       -->
+    <!-- ------------------------------------------------------------------- -->
+    <section id="view-auth" class="min-h-screen flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-gradient-to-br from-brand-50 via-white to-surface-100">
+      <div class="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 bg-white rounded-3xl shadow-xl border border-slate-200/80 overflow-hidden">
+
+        <!-- Left Brand & Scope Panel -->
+        <div class="lg:col-span-5 bg-slate-900 text-white p-7 sm:p-10 flex flex-col justify-between relative overflow-hidden">
+          <div class="relative z-10">
+            <div class="inline-flex items-center gap-2.5 mb-8">
+              <div class="w-11 h-11 rounded-2xl bg-brand-500 text-white flex items-center justify-center shadow-lg">
+                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/>
+                  <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
+                </svg>
+              </div>
+              <div>
+                <h1 class="text-2xl font-extrabold tracking-tight">Green<span class="text-brand-400">Cart</span></h1>
+                <p class="text-xs text-slate-400">Paperless Retail &amp; Eco-POS</p>
+              </div>
+            </div>
+
+            <h2 class="text-2xl sm:text-3xl font-bold leading-tight mb-4">
+              Sustainable shopping backed by verifiable digital receipts.
+            </h2>
+            <p class="text-sm text-slate-300 leading-relaxed mb-6">
+              Sign in to access your role-specific workspace. Customer accounts enter the storefront, cart, QR receipts, purchase history, and Eco-Impact tracker. Admin accounts enter the POS terminal and inventory manager.
+            </p>
+
+            <!-- Instant Demo Login Shortcuts -->
+            <div class="space-y-2.5 pt-4 border-t border-slate-800">
+              <p class="text-[11px] font-bold uppercase tracking-wider text-brand-400">Quick Interactive Demo Access</p>
+              <button type="button" onclick="quickDemoLogin('maria_santos')" class="w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 transition-all text-left group">
+                <div>
+                  <span class="text-sm font-bold text-white block group-hover:text-brand-300 transition-colors">Enter as Customer</span>
+                  <span class="text-xs text-slate-400 font-mono">@maria_santos &bull; Storefront &amp; QR Receipts</span>
+                </div>
+                <span class="px-2.5 py-1 rounded-lg bg-brand-500/20 text-brand-300 text-xs font-semibold">Customer &rarr;</span>
+              </button>
+              <button type="button" onclick="quickDemoLogin('admin_qcu')" class="w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 transition-all text-left group">
+                <div>
+                  <span class="text-sm font-bold text-white block group-hover:text-amber-300 transition-colors">Enter as Store Admin</span>
+                  <span class="text-xs text-slate-400 font-mono">@admin_qcu &bull; POS Terminal &amp; Inventory</span>
+                </div>
+                <span class="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 text-xs font-semibold">Admin &rarr;</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="relative z-10 mt-8 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+            <span>7-Entity Relational Prototype</span>
+            <button type="button" onclick="openSchemaInspector()" class="text-brand-400 hover:text-brand-300 underline font-medium">Inspect Schema</button>
+          </div>
+        </div>
+
+        <!-- Right Login / Register Forms -->
+        <div class="lg:col-span-7 p-7 sm:p-10 flex flex-col justify-center">
+          <!-- Mode Tabs -->
+          <div class="inline-flex p-1 rounded-2xl bg-slate-100 mb-7 self-start">
+            <button id="auth-tab-login" type="button" onclick="switchAuthTab('login')" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-white text-slate-900 shadow-sm transition-all">
+              Sign In
+            </button>
+            <button id="auth-tab-register" type="button" onclick="switchAuthTab('register')" class="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:text-slate-900 transition-all">
+              Create Customer Account
+            </button>
+          </div>
+
+          <!-- Login Form -->
+          <form id="form-login" onsubmit="handleLoginSubmit(event)" class="space-y-4">
+            <div>
+              <h3 class="text-xl font-bold text-slate-900">Welcome back</h3>
+              <p class="text-sm text-slate-500 mt-0.5">Your <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">account_type</code> determines your portal destination.</p>
+            </div>
+
+            <div>
+              <label for="login-username" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Username</label>
+              <input id="login-username" type="text" required placeholder="e.g., maria_santos or admin_qcu" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm transition-all" />
+            </div>
+
+            <div>
+              <label for="login-password" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Password</label>
+              <input id="login-password" type="password" required placeholder="Enter your password" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm transition-all" />
+              <p class="text-xs text-slate-400 mt-1.5">Demo credentials: <span class="font-mono text-slate-600">maria_santos / customer123</span> or <span class="font-mono text-slate-600">admin_qcu / admin123</span></p>
+            </div>
+
+            <div id="login-error-box" class="hidden p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs font-medium text-red-700"></div>
+
+            <button type="submit" class="w-full py-3.5 px-5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-sm shadow-md shadow-brand-500/20 transition-all">
+              Sign In to GreenCart
+            </button>
+          </form>
+
+          <!-- Customer Registration Form (Strictly creates 'customer' accounts per Build Plan Section 5.2) -->
+          <form id="form-register" onsubmit="handleRegisterSubmit(event)" class="hidden space-y-4">
+            <div>
+              <h3 class="text-xl font-bold text-slate-900">Register a Customer Account</h3>
+              <p class="text-sm text-slate-500 mt-0.5">Public registration provisions <code class="font-mono text-xs bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded">account_type = customer</code>.</p>
+            </div>
+
+            <div>
+              <label for="reg-fullname" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Full Name</label>
+              <input id="reg-fullname" type="text" required placeholder="e.g., Ana Reyes" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm transition-all" />
+            </div>
+
+            <div>
+              <label for="reg-username" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Username (Unique)</label>
+              <input id="reg-username" type="text" required minlength="3" pattern="[a-zA-Z0-9_]+" placeholder="e.g., ana_reyes" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm font-mono transition-all" />
+            </div>
+
+            <div>
+              <label for="reg-password" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Password (Min 6 characters)</label>
+              <input id="reg-password" type="password" required minlength="6" placeholder="Create a secure password" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm transition-all" />
+            </div>
+
+            <div id="reg-error-box" class="hidden p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs font-medium text-red-700"></div>
+
+            <button type="submit" class="w-full py-3.5 px-5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-sm shadow-md shadow-brand-500/20 transition-all">
+              Create Account &amp; Enter Storefront
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------- -->
+    <!-- VIEW 2: CUSTOMER PORTAL — CATALOG & CART PANEL (Wireframe Screen 2) -->
+    <!-- ------------------------------------------------------------------- -->
+    <section id="view-customer-catalog" class="hidden max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <!-- Storefront Hero Banner -->
+      <div class="rounded-3xl bg-gradient-to-r from-brand-700 via-brand-600 to-brand-500 text-white p-6 sm:p-8 mb-6 shadow-md relative overflow-hidden">
+        <div class="max-w-2xl relative z-10">
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-xs font-semibold backdrop-blur-sm mb-3">
+            <span class="w-2 h-2 rounded-full bg-brand-200"></span>
+            100% Paperless QR Checkout
+          </span>
+          <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight mb-2">Eco-Friendly Everyday Essentials</h1>
+          <p class="text-sm text-brand-50 leading-relaxed">
+            Browse sustainable goods with live inventory tracking. Every checkout automatically generates a verifiable QR digital receipt and logs your estimated paper and carbon savings.
+          </p>
+        </div>
+        <svg class="hidden md:block absolute right-8 -bottom-6 w-48 h-48 text-white/10" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66.95-2.3c.48.17.98.3 1.34.3C19 20 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8Z"/>
+        </svg>
+      </div>
+
+      <!-- Main Split Layout: Product Catalog (Left) + Persistent Cart Panel (Right on Desktop) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+        <!-- Catalog Column -->
+        <div class="lg:col-span-8 space-y-5">
+          <!-- Search & Schema-Safe Filters Bar -->
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input id="catalog-search-input" type="text" oninput="renderCustomerCatalog()" placeholder="Search eco-friendly products by name or description..." class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm" />
+            </div>
+
+            <div class="flex gap-2">
+              <select id="catalog-stock-filter" onchange="renderCustomerCatalog()" aria-label="Filter by stock status" class="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:border-brand-500 outline-none">
+                <option value="ALL">All Availability</option>
+                <option value="In Stock">In Stock</option>
+                <option value="Low Stock">Low Stock</option>
+                <option value="AVAILABLE_ONLY">Hide Out of Stock</option>
+              </select>
+
+              <select id="catalog-sort-select" onchange="renderCustomerCatalog()" aria-label="Sort products" class="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:border-brand-500 outline-none">
+                <option value="DEFAULT">Sort: Default</option>
+                <option value="PRICE_ASC">Price: Low &rarr; High</option>
+                <option value="PRICE_DESC">Price: High &rarr; Low</option>
+                <option value="NAME_ASC">Name: A &rarr; Z</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Results Count -->
+          <div class="flex items-center justify-between px-1">
+            <p id="catalog-result-count" class="text-xs font-semibold text-slate-500">Showing 0 products</p>
+            <span class="text-xs text-slate-400">Live inventory synced with <code class="font-mono text-slate-600">inventory</code> table</span>
+          </div>
+
+          <!-- Product Cards Grid -->
+          <div id="catalog-product-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- Desktop Cart Panel (Wireframe: "Catalog, with search, product cards and a cart panel") -->
+        <aside class="hidden lg:block lg:col-span-4 sticky top-24 bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden">
+          <div id="desktop-cart-container">
+            <!-- Rendered via shared renderCartPanel() -->
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------- -->
+    <!-- VIEW 3: DIGITAL RECEIPT / QR VIEW (Wireframe Screen 3)              -->
+    <!-- ------------------------------------------------------------------- -->
+    <section id="view-customer-receipt" class="hidden max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <!-- QR Token Verification / Scan Simulator Bar -->
+      <div class="no-print bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm mb-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+          <div>
+            <h2 class="text-sm font-bold text-slate-900">QR Token Lookup &amp; Verification</h2>
+            <p class="text-xs text-slate-500">Verify any opaque receipt token stored in <code class="font-mono text-slate-700">digital_receipts.qr_code</code>.</p>
+          </div>
+          <button type="button" onclick="navigateCustomer('history')" class="text-xs font-bold text-brand-600 hover:text-brand-700 self-start sm:self-auto">
+            &larr; Back to Purchase History
+          </button>
+        </div>
+        <form onsubmit="handleTokenLookup(event)" class="flex flex-col sm:flex-row gap-2">
+          <input id="receipt-token-input" type="text" placeholder="Enter receipt token (e.g., GC-8F3B91E4...)" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 font-mono text-xs focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
+          <button type="submit" class="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors">
+            Verify Token
+          </button>
+        </form>
+        <div id="receipt-lookup-alert" class="hidden mt-3 p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-medium text-red-700"></div>
+      </div>
+
+      <!-- Digital Receipt Card -->
+      <div id="printable-receipt-area" class="bg-white rounded-3xl border border-slate-200/90 shadow-lg overflow-hidden">
+        <!-- Populated dynamically by renderDigitalReceipt() -->
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------- -->
+    <!-- VIEW 4: CUSTOMER PURCHASE HISTORY (Wireframe Screen 4)              -->
+    <!-- ------------------------------------------------------------------- -->
+    <section id="view-customer-history" class="hidden max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">Purchase History</h1>
+          <p class="text-sm text-slate-500 mt-0.5">Completed paperless transactions linked to your customer account.</p>
+        </div>
+        <button onclick="navigateCustomer('catalog')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold shadow-sm transition-colors self-start">
+          <span>+ New Purchase</span>
+        </button>
+      </div>
+
+      <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                <th class="py-3.5 px-5">Transaction ID</th>
+                <th class="py-3.5 px-5">Date &amp; Time</th>
+                <th class="py-3.5 px-5">Items Purchased</th>
+                <th class="py-3.5 px-5">Total Amount</th>
+                <th class="py-3.5 px-5">Est. Eco-Impact</th>
+                <th class="py-3.5 px-5 text-right">Digital Receipt</th>
+              </tr>
+            </thead>
+            <tbody id="purchase-history-tbody" class="divide-y divide-slate-100 text-sm">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------- -->
+    <!-- VIEW 5: ECO-IMPACT DASHBOARD (Wireframe Screen 5)                   -->
+    <!-- ------------------------------------------------------------------- -->
+    <section id="view-customer-eco" class="hidden max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+      <!-- Header + Scope Selector (Personal vs Store-Wide per Build Plan Section 3.4) -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">Eco-Impact Dashboard</h1>
+          <p class="text-sm text-slate-500 mt-0.5">Verified paperless transaction counts and estimated environmental savings.</p>
+        </div>
+
+        <div class="inline-flex p-1 rounded-2xl bg-white border border-slate-200 shadow-sm self-start">
+          <button id="eco-scope-personal" type="button" onclick="setEcoScope('personal')" class="px-4 py-2 rounded-xl text-xs font-bold bg-brand-500 text-white transition-all">
+            My Account Impact
+          </button>
+          <button id="eco-scope-store" type="button" onclick="setEcoScope('store')" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 transition-all">
+            Store-Wide Total
+          </button>
+        </div>
+      </div>
+
+      <!-- Three Core Wireframe Metric Cards -->
+      <div id="eco-kpi-grid" class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <!-- Populated dynamically -->
+      </div>
+
+      <!-- Transaction-Level Eco-Impact Ledger & Transparent Estimation Methodology -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div class="lg:col-span-8 bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <h2 class="text-sm font-bold text-slate-900">Recorded <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">eco_impact</code> Ledger</h2>
+            <span id="eco-ledger-scope-label" class="text-xs font-semibold text-brand-700 bg-brand-50 px-2.5 py-1 rounded-lg">Scope: Personal Account</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50/70 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  <th class="py-3 px-5">Impact ID</th>
+                  <th class="py-3 px-5">Transaction</th>
+                  <th class="py-3 px-5">Date</th>
+                  <th class="py-3 px-5">Est. Paper Saved</th>
+                  <th class="py-3 px-5">Est. CO&#8322; Reduction</th>
+                </tr>
+              </thead>
+              <tbody id="eco-ledger-tbody" class="divide-y divide-slate-100 text-sm">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Methodology Transparency Card (Build Plan Section 6.6) -->
+        <div class="lg:col-span-4 bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6 flex flex-col justify-between space-y-4">
+          <div>
+            <div class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center mb-4">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+              </svg>
+            </div>
+            <h3 class="text-base font-bold text-slate-900 mb-2">Estimation Methodology</h3>
+            <p class="text-xs text-slate-600 leading-relaxed mb-3">
+              In compliance with GreenCart data-integrity standards, environmental figures are displayed as <strong>documented estimates</strong> derived per completed paperless transaction:
+            </p>
+            <ul class="space-y-2 text-xs text-slate-600">
+              <li class="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                <span class="font-bold text-slate-800 block">Paper Saved (Sheets)</span>
+                <span class="font-mono text-[11px] text-brand-700">1.00 base sheet + (0.25 &times; distinct line items)</span>
+              </li>
+              <li class="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                <span class="font-bold text-slate-800 block">Carbon Reduction (g CO&#8322;e)</span>
+                <span class="font-mono text-[11px] text-brand-700">Paper Saved (sheets) &times; 3.50 g CO&#8322;e/sheet</span>
+              </li>
+            </ul>
+          </div>
+          <p class="text-[11px] text-slate-400 pt-3 border-t border-slate-100">
+            1-to-1 cardinality enforced between <code class="font-mono">transactions</code> and <code class="font-mono">eco_impact</code>.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------- -->
+    <!-- VIEW 6: ADMIN POS DASHBOARD (Wireframe Screen 6)                    -->
+    <!-- ------------------------------------------------------------------- -->
+    <section id="view-admin-pos" class="hidden max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div>
+          <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">Point of Sale (POS) Terminal</h1>
+          <p class="text-sm text-slate-500">Select products, adjust quantities, assign customer account, and issue a QR digital receipt.</p>
+        </div>
+        <div class="flex items-center gap-2 text-xs font-semibold text-slate-600 bg-white px-3.5 py-2 rounded-xl border border-slate-200">
+          <span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse"></span>
+          <span>Shared Atomic Sale Service Active</span>
+        </div>
+      </div>
+
+      <!-- CheoreoBiz-inspired Two-Column POS Layout -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+        <!-- Left Column: Quick-Tap Product Selection List -->
+        <div class="lg:col-span-7 bg-white rounded-3xl border border-slate-200/90 shadow-sm p-5 space-y-4">
+          <div class="flex flex-col sm:flex-row gap-3">
+            <div class="relative flex-1">
+              <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input id="pos-search-input" type="text" oninput="renderAdminPOS()" placeholder="Search product name or ID..." class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm" />
+            </div>
+            <select id="pos-stock-filter" onchange="renderAdminPOS()" class="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 outline-none">
+              <option value="ALL">All Products</option>
+              <option value="AVAILABLE">In Stock Only</option>
+            </select>
+          </div>
+
+          <div id="pos-product-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[620px] overflow-y-auto pr-1">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Right Column: Current Sale Panel -->
+        <div class="lg:col-span-5 sticky top-24 bg-white rounded-3xl border border-slate-200/90 shadow-md overflow-hidden flex flex-col">
+          <div class="p-5 bg-slate-900 text-white flex items-center justify-between">
+            <div>
+              <h2 class="text-base font-bold">Current Sale</h2>
+              <p class="text-xs text-slate-400">Server-validated stock &amp; decimal pricing</p>
+            </div>
+            <button type="button" onclick="clearPosCart()" class="text-xs font-semibold text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors">
+              Clear
+            </button>
+          </div>
+
+          <div class="p-5 space-y-4">
+            <!-- Customer Account Association (Build Plan Section 3.4 Decision #1) -->
+            <div>
+              <label for="pos-customer-select" class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Customer Account (<code class="font-mono text-slate-700">transactions.account_id</code>)
+              </label>
+              <select id="pos-customer-select" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-sm font-semibold text-slate-800 focus:border-brand-500 outline-none">
+                <!-- Populated with customer accounts including walkin_customer -->
+              </select>
+            </div>
+
+            <!-- Current Sale Line Items -->
+            <div class="border-t border-b border-slate-100 py-3">
+              <div id="pos-sale-items" class="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+
+            <!-- Sale Totals & Estimated Eco-Impact Preview -->
+            <div class="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-200/70">
+              <div class="flex justify-between text-xs text-slate-500">
+                <span>Distinct Line Items</span>
+                <span id="pos-line-count" class="font-bold text-slate-700 tabular-nums">0</span>
+              </div>
+              <div class="flex justify-between text-xs text-brand-700">
+                <span>Est. Paperless Savings</span>
+                <span id="pos-eco-preview" class="font-semibold tabular-nums">0.00 sheets &bull; 0.00 g CO&#8322;e</span>
+              </div>
+              <div class="pt-2 border-t border-slate-200 flex justify-between items-baseline">
+                <span class="text-sm font-bold text-slate-900">Total Amount</span>
+                <span id="pos-total-amount" class="text-2xl font-extrabold text-slate-900 tabular-nums">&#8369;0.00</span>
+              </div>
+            </div>
+
+            <!-- Exact Wireframe CTA Button -->
+            <button id="pos-complete-btn" type="button" onclick="handlePosCheckout()" class="w-full py-4 px-5 rounded-2xl bg-brand-500 hover:bg-brand-600 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow-lg shadow-brand-500/20 transition-all flex items-center justify-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+              </svg>
+              <span>Complete Sale and Generate QR Receipt</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------------- -->
+    <!-- VIEW 7: ADMIN INVENTORY MANAGEMENT (Wireframe Screen 7)             -->
+    <!-- ------------------------------------------------------------------- -->
+    <section id="view-admin-inventory" class="hidden max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">Inventory Management</h1>
+          <p class="text-sm text-slate-500">Manage <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">products</code> and 1-to-1 synchronized <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">inventory</code> stock levels.</p>
+        </div>
+        <button type="button" onclick="openProductModal()" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold shadow-sm transition-colors self-start">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          <span>Add New Product</span>
+        </button>
+      </div>
+
+      <!-- Inventory Summary Strip -->
+      <div id="inventory-summary-cards" class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Populated dynamically -->
+      </div>
+
+      <!-- Search & Filter Bar -->
+      <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row gap-3">
+        <div class="relative flex-1">
+          <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input id="inv-search-input" type="text" oninput="renderAdminInventory()" placeholder="Filter inventory by product name or description..." class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-brand-500 outline-none" />
+        </div>
+        <select id="inv-status-filter" onchange="renderAdminInventory()" class="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 outline-none">
+          <option value="ALL">All Stock Statuses</option>
+          <option value="In Stock">In Stock (&gt; 10)</option>
+          <option value="Low Stock">Low Stock (1–10)</option>
+          <option value="Out of Stock">Out of Stock (0)</option>
+        </select>
+      </div>
+
+      <!-- Inventory Table -->
+      <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                <th class="py-3.5 px-5">Product ID</th>
+                <th class="py-3.5 px-5">Product Details</th>
+                <th class="py-3.5 px-5">Unit Price</th>
+                <th class="py-3.5 px-5">Quantity</th>
+                <th class="py-3.5 px-5">Stock Status</th>
+                <th class="py-3.5 px-5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-tbody" class="divide-y divide-slate-100 text-sm">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- MOBILE CART DRAWER (Customer Portal)                                  -->
+  <!-- ===================================================================== -->
+  <div id="mobile-cart-drawer" class="hidden fixed inset-0 z-50 lg:hidden">
+    <div onclick="toggleMobileCart(false)" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs"></div>
+    <div class="fixed right-0 top-0 bottom-0 w-full max-w-md bg-white shadow-2xl flex flex-col z-10">
+      <div id="mobile-cart-container" class="flex-1 flex flex-col overflow-hidden">
+        <!-- Rendered via shared renderCartPanel() -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- ADD / EDIT PRODUCT & INVENTORY MODAL (Admin)                          -->
+  <!-- ===================================================================== -->
+  <div id="product-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div onclick="closeProductModal()" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs"></div>
+    <div class="relative z-10 w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+        <h3 id="product-modal-title" class="text-base font-bold">Add New Product</h3>
+        <button type="button" onclick="closeProductModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <form onsubmit="handleProductModalSubmit(event)" class="p-6 space-y-4">
+        <input type="hidden" id="edit-product-id" value="" />
+
+        <div>
+          <label for="prod-name-input" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Product Name</label>
+          <input id="prod-name-input" type="text" required maxlength="100" placeholder="e.g., Bamboo Cutlery Travel Pouch" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 outline-none text-sm" />
+        </div>
+
+        <div>
+          <label for="prod-desc-input" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Description</label>
+          <textarea id="prod-desc-input" rows="2" required maxlength="240" placeholder="Concise eco-friendly product summary..." class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 outline-none text-sm"></textarea>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label for="prod-price-input" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Unit Price (&#8369;)</label>
+            <input id="prod-price-input" type="number" step="0.01" min="0.01" required placeholder="150.00" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 outline-none text-sm tabular-nums" />
+          </div>
+
+          <div>
+            <label for="prod-qty-input" class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Stock Quantity</label>
+            <input id="prod-qty-input" type="number" step="1" min="0" required placeholder="25" oninput="previewStockStatusBadge()" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-brand-500 outline-none text-sm tabular-nums" />
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+          <span class="text-slate-600 font-medium">Derived <code class="font-mono">inventory.stock_status</code>:</span>
+          <span id="prod-status-preview" class="px-2.5 py-1 rounded-full font-bold bg-brand-100 text-brand-800">In Stock</span>
+        </div>
+
+        <div id="product-modal-error" class="hidden p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-medium"></div>
+
+        <div class="pt-2 flex justify-end gap-2.5">
+          <button type="button" onclick="closeProductModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button type="submit" class="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold shadow-sm">Save Product &amp; Inventory</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- COMPLETED SALE / QR RECEIPT MODAL (Used after POS or Cart Checkout)   -->
+  <!-- ===================================================================== -->
+  <div id="sale-success-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div onclick="closeSaleSuccessModal()" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <div class="relative z-10 w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+      <div id="sale-success-modal-body">
+        <!-- Populated dynamically with QR Code & Eco-Impact summary -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 7-ENTITY RELATIONAL DATABASE INSPECTOR MODAL                          -->
+  <!-- ===================================================================== -->
+  <div id="schema-inspector-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div onclick="closeSchemaInspector()" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <div class="relative z-10 w-full max-w-4xl max-h-[88vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden">
+      <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-bold">GreenCart 7-Entity Relational State Inspector</h3>
+          <p class="text-xs text-slate-400">Live in-memory mirror of the Activity 3 &amp; 4 MySQL ERD schema</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="resetDemoDatabase()" class="px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-200 text-xs font-semibold transition-colors">
+            Reset Seed Data
+          </button>
+          <button type="button" onclick="closeSchemaInspector()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Entity Table Selector Tabs -->
+      <div id="schema-entity-tabs" class="px-6 py-3 bg-slate-100 border-b border-slate-200 flex gap-1.5 overflow-x-auto">
+        <!-- Populated dynamically -->
+      </div>
+
+      <!-- JSON / Table View of Selected Entity -->
+      <div id="schema-entity-content" class="p-6 overflow-y-auto flex-1 font-mono text-xs bg-slate-50">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- TOAST NOTIFICATION CONTAINER (Replaces browser alert())               -->
+  <!-- ===================================================================== -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+  <!-- ===================================================================== -->
+  <!-- APPLICATION LOGIC, QR ENCODER & RELATIONAL DATA STORE                 -->
+  <!-- ===================================================================== -->
+  <script>
+    /**
+     * =========================================================================
+     * 1. SELF-CONTAINED ISO/IEC 18004 QR CODE SVG GENERATOR (Version 3-L, 29x29)
+     * =========================================================================
+     * Generates a genuine, scannable QR code locally with zero external API
+     * calls, complying with Section 2.2 ("Generate QR images locally on the
+     * server/client; do not rely on an external QR API").
+     */
+    const QREncoder = (() => {
+      const GF_EXP = new Uint8Array(512);
+      const GF_LOG = new Uint8Array(256);
+      let x = 1;
+      for (let i = 0; i < 255; i++) {
+        GF_EXP[i] = x;
+        GF_LOG[x] = i;
+        x <<= 1;
+        if (x & 0x100) x ^= 0x11d;
+      }
+      for (let i = 255; i < 512; i++) {
+        GF_EXP[i] = GF_EXP[i - 255];
+      }
+
+      function gfMul(a, b) {
+        if (a === 0 || b === 0) return 0;
+        return GF_EXP[GF_LOG[a] + GF_LOG[b]];
+      }
+
+      function getGeneratorPoly(ecCount) {
+        let poly = [1];
+        for (let i = 0; i < ecCount; i++) {
+          const next = new Array(poly.length + 1).fill(0);
+          const factor = GF_EXP[i];
+          for (let j = 0; j < poly.length; j++) {
+            next[j] ^= poly[j];
+            next[j + 1] ^= gfMul(poly[j], factor);
+          }
+          poly = next;
+        }
+        return poly;
+      }
+
+      function computeReedSolomon(dataBytes, ecCount) {
+        const gen = getGeneratorPoly(ecCount);
+        const rem = new Uint8Array(ecCount);
+        for (let i = 0; i < dataBytes.length; i++) {
+          const factor = dataBytes[i] ^ rem[0];
+          for (let j = 0; j < ecCount - 1; j++) {
+            rem[j] = rem[j + 1] ^ gfMul(gen[j + 1], factor);
+          }
+          rem[ecCount - 1] = gfMul(gen[ecCount], factor);
+        }
+        return rem;
+      }
+
+      function generateMatrix(text) {
+        // Version 3-L: 29x29 modules, 55 data codewords, 15 EC codewords
+        const size = 29;
+        const dataCapacity = 55;
+        const ecCount = 15;
+
+        const utf8 = new TextEncoder().encode(text.slice(0, 52));
+        const bits = [];
+        const pushBits = (val, len) => {
+          for (let i = len - 1; i >= 0; i--) {
+            bits.push((val >>> i) & 1);
+          }
+        };
+
+        // Mode indicator: Byte (0100) + 8-bit character count
+        pushBits(0b0100, 4);
+        pushBits(utf8.length, 8);
+        for (const b of utf8) pushBits(b, 8);
+
+        // Terminator up to 4 bits
+        const maxDataBits = dataCapacity * 8;
+        const termLen = Math.min(4, maxDataBits - bits.length);
+        pushBits(0, termLen);
+
+        // Pad to byte boundary
+        while (bits.length % 8 !== 0) bits.push(0);
+
+        const dataBytes = new Uint8Array(dataCapacity);
+        for (let i = 0; i < bits.length / 8; i++) {
+          let byteVal = 0;
+          for (let b = 0; b < 8; b++) byteVal = (byteVal << 1) | bits[i * 8 + b];
+          dataBytes[i] = byteVal;
+        }
+
+        // Pad codewords 0xEC, 0x11
+        const padBytes = [0xec, 0x11];
+        let padIdx = 0;
+        for (let i = bits.length / 8; i < dataCapacity; i++) {
+          dataBytes[i] = padBytes[padIdx % 2];
+          padIdx++;
+        }
+
+        const ecBytes = computeReedSolomon(dataBytes, ecCount);
+        const allCodewords = new Uint8Array(dataCapacity + ecCount);
+        allCodewords.set(dataBytes, 0);
+        allCodewords.set(ecBytes, dataCapacity);
+
+        const modules = Array.from({ length: size }, () => new Int8Array(size).fill(-1));
+        const isFunction = Array.from({ length: size }, () => new Uint8Array(size));
+
+        const setFunc = (r, c, dark) => {
+          if (r >= 0 && r < size && c >= 0 && c < size) {
+            modules[r][c] = dark ? 1 : 0;
+            isFunction[r][c] = 1;
+          }
+        };
+
+        // Finder patterns + 1px white separators
+        const placeFinder = (row, col) => {
+          for (let dr = -1; dr <= 7; dr++) {
+            for (let dc = -1; dc <= 7; dc++) {
+              const inOuter = dr >= 0 && dr <= 6 && dc >= 0 && dc <= 6;
+              const inBorder = dr === 0 || dr === 6 || dc === 0 || dc === 6;
+              const inInner = dr >= 2 && dr <= 4 && dc >= 2 && dc <= 4;
+              setFunc(row + dr, col + dc, inOuter && (inBorder || inInner));
+            }
+          }
+        };
+        placeFinder(0, 0);
+        placeFinder(0, size - 7);
+        placeFinder(size - 7, 0);
+
+        // Alignment pattern at (22, 22) for Version 3
+        for (let dr = -2; dr <= 2; dr++) {
+          for (let dc = -2; dc <= 2; dc++) {
+            const dark = Math.max(Math.abs(dr), Math.abs(dc)) !== 1;
+            setFunc(22 + dr, 22 + dc, dark);
+          }
+        }
+
+        // Timing patterns
+        for (let i = 8; i < size - 8; i++) {
+          setFunc(6, i, i % 2 === 0);
+          setFunc(i, 6, i % 2 === 0);
+        }
+
+        // Dark module
+        setFunc(size - 8, 8, true);
+
+        // Format information for Level L (01) + Mask 0 (000) => 0x77c4 (MSB first)
+        const formatBits = 0x77c4;
+        const fmtCoords1 = [
+          [8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [8, 7], [8, 8],
+          [7, 8], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8]
+        ];
+        const fmtCoords2 = [
+          [size - 1, 8], [size - 2, 8], [size - 3, 8], [size - 4, 8], [size - 5, 8], [size - 6, 8], [size - 7, 8],
+          [8, size - 8], [8, size - 7], [8, size - 6], [8, size - 5], [8, size - 4], [8, size - 3], [8, size - 2], [8, size - 1]
+        ];
+        for (let i = 0; i < 15; i++) {
+          const bit = ((formatBits >>> (14 - i)) & 1) === 1;
+          setFunc(fmtCoords1[i][0], fmtCoords1[i][1], bit);
+          setFunc(fmtCoords2[i][0], fmtCoords2[i][1], bit);
+        }
+
+        // Place data bits in zig-zag with Mask 0: (r + c) % 2 === 0
+        let bitIdx = 0;
+        const totalBits = allCodewords.length * 8;
+        let upward = true;
+        for (let right = size - 1; right >= 1; right -= 2) {
+          if (right === 6) right = 5;
+          for (let step = 0; step < size; step++) {
+            const r = upward ? size - 1 - step : step;
+            for (let dx = 0; dx < 2; dx++) {
+              const c = right - dx;
+              if (!isFunction[r][c]) {
+                let dark = false;
+                if (bitIdx < totalBits) {
+                  const byteVal = allCodewords[bitIdx >>> 3];
+                  dark = ((byteVal >>> (7 - (bitIdx & 7))) & 1) === 1;
+                  bitIdx++;
+                }
+                // Apply Mask 0
+                if ((r + c) % 2 === 0) dark = !dark;
+                modules[r][c] = dark ? 1 : 0;
+              }
+            }
+          }
+          upward = !upward;
+        }
+
+        return modules;
+      }
+
+      function renderSvg(text, pxSize = 180) {
+        const matrix = generateMatrix(text);
+        const n = matrix.length;
+        const quiet = 3;
+        const total = n + quiet * 2;
+        let rects = '';
+        for (let r = 0; r < n; r++) {
+          for (let c = 0; c < n; c++) {
+            if (matrix[r][c] === 1) {
+              rects += `<rect x="${c + quiet}" y="${r + quiet}" width="1" height="1" />`;
+            }
+          }
+        }
+        return `
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" width="${pxSize}" height="${pxSize}" shape-rendering="crispEdges" class="rounded-xl bg-white p-1.5 border border-slate-200 shadow-xs">
+            <rect width="${total}" height="${total}" fill="#ffffff" />
+            <g fill="#0f172a">${rects}</g>
+          </svg>
+        `;
+      }
+
+      return { renderSvg };
+    })();
+
+    /**
+     * =========================================================================
+     * 2. BESPOKE INLINE SVG PRODUCT ILLUSTRATIONS (No External Image URLs)
+     * =========================================================================
+     */
+    function getProductArtwork(productId) {
+      const icons = {
+        1: `<svg viewBox="0 0 64 64" class="w-14 h-14"><rect x="10" y="10" width="44" height="44" rx="14" fill="#e6f2d8"/><path d="M22 44L42 20" stroke="#638b29" stroke-width="4" stroke-linecap="round"/><path d="M36 20l6 5M33 24l6 5M30 28l6 5" stroke="#8ec05b" stroke-width="2.5" stroke-linecap="round"/></svg>`,
+        2: `<svg viewBox="0 0 64 64" class="w-14 h-14"><rect x="10" y="10" width="44" height="44" rx="14" fill="#fef3c7"/><path d="M20 26h24l-2 20H22L20 26z" fill="#f59e0b" opacity="0.25" stroke="#d97706" stroke-width="2.5" stroke-linejoin="round"/><path d="M26 26v-4a6 6 0 0 1 12 0v4" fill="none" stroke="#d97706" stroke-width="2.5" stroke-linecap="round"/></svg>`,
+        3: `<svg viewBox="0 0 64 64" class="w-14 h-14"><rect x="10" y="10" width="44" height="44" rx="14" fill="#e0f2fe"/><rect x="24" y="18" width="16" height="30" rx="4" fill="#0284c7" opacity="0.2" stroke="#0284c7" stroke-width="2.5"/><path d="M27 14h10v4H27z" fill="#0284c7"/></svg>`,
+        4: `<svg viewBox="0 0 64 64" class="w-14 h-14"><rect x="10" y="10" width="44" height="44" rx="14" fill="#fce7f3"/><circle cx="32" cy="32" r="13" fill="#db2777" opacity="0.18" stroke="#db2777" stroke-width="2.5"/><path d="M26 32c3-5 9-5 12 0-3 5-9 5-12 0z" fill="#db2777"/></svg>`,
+        5: `<svg viewBox="0 0 64 64" class="w-14 h-14"><rect x="10" y="10" width="44" height="44" rx="14" fill="#dcfce7"/><rect x="23" y="23" width="18" height="24" rx="5" fill="#16a34a" opacity="0.2" stroke="#16a34a" stroke-width="2.5"/><path d="M32 23v-6h6" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round"/></svg>`,
+        6: `<svg viewBox="0 0 64 64" class="w-14 h-14"><rect x="10" y="10" width="44" height="44" rx="14" fill="#f3e8ff"/><rect x="21" y="17" width="22" height="30" rx="3" fill="#7e22ce" opacity="0.18" stroke="#7e22ce" stroke-width="2.5"/><line x1="26" y1="25" x2="38" y2="25" stroke="#7e22ce" stroke-width="2.5" stroke-linecap="round"/><line x1="26" y1="32" x2="35" y2="32" stroke="#7e22ce" stroke-width="2.5" stroke-linecap="round"/></svg>`,
+        7: `<svg viewBox="0 0 64 64" class="w-14 h-14"><rect x="10" y="10" width="44" height="44" rx="14" fill="#ffedd5"/><ellipse cx="32" cy="33" rx="13" ry="9" fill="#ea580c" opacity="0.2" stroke="#ea580c" stroke-width="2.5"/><path d="M24 33h16M32 27v12" stroke="#ea580c" stroke-width="2" stroke-linecap="round"/></svg>`,
+        8: `<svg viewBox="0 0 64 64" class="w-14 h-14"><rect x="10" y="10" width="44" height="44" rx="14" fill="#ecfccb"/><path d="M22 44h20M32 44V26l-8-6h16l-8 6" fill="none" stroke="#4d7c0f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+      };
+      return icons[productId] || `<svg viewBox="0 0 64 64" class="w-14 h-14"><rect x="10" y="10" width="44" height="44" rx="14" fill="#e6f2d8"/><path d="M32 44c0-10 8-18 14-18-2 10-8 16-14 18zm0 0c0-8-6-14-12-14 1 8 6 12 12 14z" fill="#638b29"/></svg>`;
+    }
+
+    /**
+     * =========================================================================
+     * 3. SEVEN-ENTITY RELATIONAL DATABASE STORE (Mirrors Activity 3 & 4 ERD)
+     * =========================================================================
+     * Entities:
+     *   1. accounts            (account_id PK, username UNIQUE, password_hash, account_type, full_name)
+     *   2. products            (product_id PK, product_name, description, price)
+     *   3. inventory           (inventory_id PK, product_id FK UNIQUE, quantity, stock_status)
+     *   4. transactions        (transaction_id PK, account_id FK, transaction_date, total_amount)
+     *   5. transaction_details (detail_id PK, transaction_id FK, product_id FK, quantity, subtotal)
+     *   6. digital_receipts    (receipt_id PK, transaction_id FK UNIQUE, qr_code UNIQUE, receipt_date)
+     *   7. eco_impact          (impact_id PK, transaction_id FK UNIQUE, paper_saved, carbon_reduction)
+     */
+    function deriveStockStatus(qty) {
+      if (qty <= 0) return 'Out of Stock';
+      if (qty <= 10) return 'Low Stock';
+      return 'In Stock';
+    }
+
+    function calculateEcoMetrics(lineItemCount) {
+      // Documented estimation formula (Section 6.6):
+      // Base receipt (1.00 sheet) + 0.25 sheets per distinct line item
+      const paperSaved = Number((1.0 + lineItemCount * 0.25).toFixed(2));
+      // 3.50 g CO2e avoided per thermal receipt sheet saved
+      const carbonReduction = Number((paperSaved * 3.5).toFixed(2));
+      return { paper_saved: paperSaved, carbon_reduction: carbonReduction };
+    }
+
+    function generateOpaqueReceiptToken() {
+      const array = new Uint8Array(6);
+      window.crypto.getRandomValues(array);
+      const hex = Array.from(array, b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+      return `GC-${hex}`;
+    }
+
+    function createSeedDatabase() {
+      const accounts = [
+        { account_id: 1, username: 'maria_santos', password_hash: 'customer123', account_type: 'customer', full_name: 'Maria Santos' },
+        { account_id: 2, username: 'juan_delacruz', password_hash: 'customer123', account_type: 'customer', full_name: 'Juan Dela Cruz' },
+        { account_id: 3, username: 'walkin_customer', password_hash: 'walkin_locked', account_type: 'customer', full_name: 'Walk-In Customer (POS)' },
+        { account_id: 4, username: 'admin_qcu', password_hash: 'admin123', account_type: 'admin', full_name: 'Store Administrator' }
+      ];
+
+      const products = [
+        { product_id: 1, product_name: 'Bamboo Toothbrush 4-Pack', description: 'Biodegradable Moso bamboo handles with charcoal-infused soft bristles.', price: 145.00 },
+        { product_id: 2, product_name: 'Organic Canvas Market Tote', description: 'Heavy-duty unbleached cotton shopping bag with reinforced stitched handles.', price: 220.00 },
+        { product_id: 3, product_name: 'Insulated Stainless Tumbler 500ml', description: 'Double-wall vacuum flask that keeps drinks cold for 24 hours without single-use cups.', price: 480.00 },
+        { product_id: 4, product_name: 'Beeswax Reusable Food Wraps (Set of 3)', description: 'Washable organic cotton wraps coated in local beeswax and tree resin.', price: 290.00 },
+        { product_id: 5, product_name: 'Refillable Amber Glass Soap Dispenser', description: '500ml UV-protected glass pump bottle designed for zero-waste refill stations.', price: 195.00 },
+        { product_id: 6, product_name: 'Recycled Kraft Spiral Notebook', description: 'A5 dotted journal crafted from 100% post-consumer recycled paper.', price: 110.00 },
+        { product_id: 7, product_name: 'Natural Loofah Dish Scrubbers (3 pcs)', description: 'Compostable plant-fiber kitchen sponges that replace synthetic microplastic pads.', price: 95.00 },
+        { product_id: 8, product_name: 'Bamboo Utensil Travel Roll', description: 'Reusable fork, spoon, knife, chopsticks, and cleaning brush in a linen pouch.', price: 175.00 }
+      ];
+
+      const initialQuantities = {
+        1: 34,
+        2: 18,
+        3: 8,  // Low Stock
+        4: 22,
+        5: 6,  // Low Stock
+        6: 45,
+        7: 0,  // Out of Stock
+        8: 27
+      };
+
+      const inventory = products.map((p, idx) => {
+        const qty = initialQuantities[p.product_id];
+        return {
+          inventory_id: idx + 1,
+          product_id: p.product_id,
+          quantity: qty,
+          stock_status: deriveStockStatus(qty)
+        };
+      });
+
+      // Seed 3 historical completed transactions so Purchase History, Digital Receipts, and Eco-Impact work immediately
+      const transactions = [
+        { transaction_id: 1001, account_id: 1, transaction_date: '2026-11-12 10:24:00', total_amount: 365.00 },
+        { transaction_id: 1002, account_id: 1, transaction_date: '2026-11-16 15:42:00', total_amount: 590.00 },
+        { transaction_id: 1003, account_id: 2, transaction_date: '2026-11-17 11:08:00', total_amount: 465.00 }
+      ];
+
+      const transaction_details = [
+        { detail_id: 1, transaction_id: 1001, product_id: 1, quantity: 1, subtotal: 145.00 },
+        { detail_id: 2, transaction_id: 1001, product_id: 2, quantity: 1, subtotal: 220.00 },
+        { detail_id: 3, transaction_id: 1002, product_id: 3, quantity: 1, subtotal: 480.00 },
+        { detail_id: 4, transaction_id: 1002, product_id: 6, quantity: 1, subtotal: 110.00 },
+        { detail_id: 5, transaction_id: 1003, product_id: 4, quantity: 1, subtotal: 290.00 },
+        { detail_id: 6, transaction_id: 1003, product_id: 8, quantity: 1, subtotal: 175.00 }
+      ];
+
+      const digital_receipts = [
+        { receipt_id: 501, transaction_id: 1001, qr_code: 'GC-A491C82E10F4', receipt_date: '2026-11-12 10:24:00' },
+        { receipt_id: 502, transaction_id: 1002, qr_code: 'GC-7D30B59E42A1', receipt_date: '2026-11-16 15:42:00' },
+        { receipt_id: 503, transaction_id: 1003, qr_code: 'GC-9F28E14C66B9', receipt_date: '2026-11-17 11:08:00' }
+      ];
+
+      const eco_impact = [
+        { impact_id: 801, transaction_id: 1001, paper_saved: 1.50, carbon_reduction: 5.25 },
+        { impact_id: 802, transaction_id: 1002, paper_saved: 1.50, carbon_reduction: 5.25 },
+        { impact_id: 803, transaction_id: 1003, paper_saved: 1.50, carbon_reduction: 5.25 }
+      ];
+
+      return {
+        accounts,
+        products,
+        inventory,
+        transactions,
+        transaction_details,
+        digital_receipts,
+        eco_impact
+      };
+    }
+
+    // Application Runtime State
+    let db = createSeedDatabase();
+    let currentUser = null; // { account_id, username, account_type, full_name }
+    let activeView = 'auth';
+    let customerCart = []; // [{ product_id, quantity }]
+    let posCart = [];      // [{ product_id, quantity }]
+    let selectedReceiptToken = 'GC-7D30B59E42A1';
+    let ecoScope = 'personal'; // 'personal' | 'store'
+    let inspectorEntity = 'products';
+    let isProcessingSale = false;
+
+    /**
+     * =========================================================================
+     * 4. UTILITY & FORMATTING HELPERS
+     * =========================================================================
+     */
+    function formatCurrency(amount) {
+      return '₱' + Number(amount).toLocaleString('en-PH', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    }
+
+    function formatTimestamp(date = new Date()) {
+      const pad = n => String(n).padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function getStockBadgeClasses(status) {
+      if (status === 'In Stock') return 'bg-brand-100 text-brand-800 border-brand-200';
+      if (status === 'Low Stock') return 'bg-amber-100 text-amber-800 border-amber-200';
+      return 'bg-red-100 text-red-700 border-red-200';
+    }
+
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const styles = type === 'error'
+        ? 'bg-red-900 text-white border-red-700'
+        : type === 'warning'
+          ? 'bg-amber-900 text-white border-amber-700'
+          : 'bg-slate-900 text-white border-slate-700';
+      const dot = type === 'error' ? 'bg-red-400' : type === 'warning' ? 'bg-amber-400' : 'bg-brand-400';
+
+      toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl border shadow-xl text-xs font-semibold transition-all duration-300 transform translate-y-2 opacity-0 ${styles}`;
+      toast.innerHTML = `<span class="w-2.5 h-2.5 rounded-full shrink-0 ${dot}"></span><span class="flex-1">${escapeHtml(message)}</span>`;
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3400);
+    }
+
+    /**
+     * =========================================================================
+     * 5. AUTHENTICATION & ROLE-BASED ROUTING (Section 6.1)
+     * =========================================================================
+     */
+    function switchAuthTab(tab) {
+      const loginForm = document.getElementById('form-login');
+      const regForm = document.getElementById('form-register');
+      const tabLogin = document.getElementById('auth-tab-login');
+      const tabReg = document.getElementById('auth-tab-register');
+
+      document.getElementById('login-error-box').classList.add('hidden');
+      document.getElementById('reg-error-box').classList.add('hidden');
+
+      if (tab === 'login') {
+        loginForm.classList.remove('hidden');
+        regForm.classList.add('hidden');
+        tabLogin.className = 'px-5 py-2.5 rounded-xl text-sm font-bold bg-white text-slate-900 shadow-sm transition-all';
+        tabReg.className = 'px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:text-slate-900 transition-all';
+      } else {
+        loginForm.classList.add('hidden');
+        regForm.classList.remove('hidden');
+        tabReg.className = 'px-5 py-2.5 rounded-xl text-sm font-bold bg-white text-slate-900 shadow-sm transition-all';
+        tabLogin.className = 'px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:text-slate-900 transition-all';
+      }
+    }
+
+    function authenticateAccount(account) {
+      currentUser = {
+        account_id: account.account_id,
+        username: account.username,
+        account_type: account.account_type,
+        full_name: account.full_name
+      };
+
+      document.getElementById('view-auth').classList.add('hidden');
+      document.getElementById('app-header').classList.remove('hidden');
+      document.getElementById('header-user-name').textContent = currentUser.full_name;
+      document.getElementById('header-user-handle').textContent = `@${currentUser.username}`;
+
+      const badge = document.getElementById('portal-role-badge');
+      const cartBtn = document.getElementById('header-cart-btn');
+
+      if (currentUser.account_type === 'admin') {
+        badge.textContent = 'Admin Area';
+        badge.className = 'text-[11px] font-semibold uppercase tracking-wider text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded mt-1 inline-block';
+        cartBtn.classList.add('hidden');
+        navigateAdmin('pos');
+      } else {
+        badge.textContent = 'Customer Portal';
+        badge.className = 'text-[11px] font-semibold uppercase tracking-wider text-brand-700 bg-brand-100 px-1.5 py-0.5 rounded mt-1 inline-block';
+        cartBtn.classList.remove('hidden');
+        // Set default receipt token to customer's most recent receipt if available
+        const userTxIds = new Set(db.transactions.filter(t => t.account_id === currentUser.account_id).map(t => t.transaction_id));
+        const userReceipts = db.digital_receipts.filter(r => userTxIds.has(r.transaction_id));
+        if (userReceipts.length > 0) {
+          selectedReceiptToken = userReceipts[userReceipts.length - 1].qr_code;
+        }
+        navigateCustomer('catalog');
+      }
+    }
+
+    function handleLoginSubmit(e) {
+      e.preventDefault();
+      const username = document.getElementById('login-username').value.trim().toLowerCase();
+      const password = document.getElementById('login-password').value;
+      const errBox = document.getElementById('login-error-box');
+
+      const account = db.accounts.find(a => a.username.toLowerCase() === username && a.password_hash === password);
+      if (!account) {
+        errBox.textContent = 'Invalid username or password. Try maria_santos / customer123 or admin_qcu / admin123.';
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      errBox.classList.add('hidden');
+      showToast(`Signed in as ${account.full_name} (${account.account_type})`);
+      authenticateAccount(account);
+    }
+
+    function quickDemoLogin(username) {
+      const account = db.accounts.find(a => a.username === username);
+      if (account) {
+        showToast(`Demo session started for ${account.full_name}`);
+        authenticateAccount(account);
+      }
+    }
+
+    function handleRegisterSubmit(e) {
+      e.preventDefault();
+      const fullName = document.getElementById('reg-fullname').value.trim();
+      const username = document.getElementById('reg-username').value.trim().toLowerCase();
+      const password = document.getElementById('reg-password').value;
+      const errBox = document.getElementById('reg-error-box');
+
+      if (db.accounts.some(a => a.username.toLowerCase() === username)) {
+        errBox.textContent = 'That username is already taken. Please choose a unique username.';
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      // Strictly enforce customer-only public registration (Build Plan Section 5.2)
+      const newAccount = {
+        account_id: Math.max(...db.accounts.map(a => a.account_id)) + 1,
+        username,
+        password_hash: password,
+        account_type: 'customer',
+        full_name: fullName
+      };
+      db.accounts.push(newAccount);
+      errBox.classList.add('hidden');
+      showToast(`Customer account @${username} created!`);
+      authenticateAccount(newAccount);
+    }
+
+    function logoutUser() {
+      currentUser = null;
+      customerCart = [];
+      posCart = [];
+      hideAllViews();
+      document.getElementById('app-header').classList.add('hidden');
+      document.getElementById('view-auth').classList.remove('hidden');
+      document.getElementById('form-login').reset();
+      showToast('Session ended safely.');
+    }
+
+    function hideAllViews() {
+      const ids = [
+        'view-auth',
+        'view-customer-catalog',
+        'view-customer-receipt',
+        'view-customer-history',
+        'view-customer-eco',
+        'view-admin-pos',
+        'view-admin-inventory'
+      ];
+      ids.forEach(id => document.getElementById(id).classList.add('hidden'));
+    }
+
+    function navigateDefault() {
+      if (!currentUser) return;
+      if (currentUser.account_type === 'admin') navigateAdmin('pos');
+      else navigateCustomer('catalog');
+    }
+
+    function renderRoleNav(items, activeKey) {
+      const desktopNav = document.getElementById('desktop-nav');
+      const mobileNav = document.getElementById('mobile-nav');
+
+      const buildBtn = (item, isMobile) => {
+        const isActive = item.key === activeKey;
+        const base = isMobile
+          ? 'px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all'
+          : 'px-3.5 py-2 rounded-xl text-xs font-bold transition-all';
+        const state = isActive
+          ? 'bg-brand-500 text-white shadow-xs'
+          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900';
+        return `<button type="button" onclick="${item.action}" class="${base} ${state}">${item.label}</button>`;
+      };
+
+      desktopNav.innerHTML = items.map(i => buildBtn(i, false)).join('');
+      mobileNav.innerHTML = items.map(i => buildBtn(i, true)).join('');
+    }
+
+    function navigateCustomer(section) {
+      if (!currentUser || currentUser.account_type !== 'customer') {
+        showToast('Access denied: Customer account required.', 'error');
+        return;
+      }
+      activeView = `customer-${section}`;
+      hideAllViews();
+
+      renderRoleNav([
+        { key: 'catalog', label: 'Product Catalog', action: "navigateCustomer('catalog')" },
+        { key: 'receipt', label: 'Digital Receipt / QR', action: "navigateCustomer('receipt')" },
+        { key: 'history', label: 'Purchase History', action: "navigateCustomer('history')" },
+        { key: 'eco', label: 'Eco-Impact Dashboard', action: "navigateCustomer('eco')" }
+      ], section);
+
+      if (section === 'catalog') {
+        document.getElementById('view-customer-catalog').classList.remove('hidden');
+        renderCustomerCatalog();
+        renderCustomerCart();
+      } else if (section === 'receipt') {
+        document.getElementById('view-customer-receipt').classList.remove('hidden');
+        renderDigitalReceipt(selectedReceiptToken);
+      } else if (section === 'history') {
+        document.getElementById('view-customer-history').classList.remove('hidden');
+        renderPurchaseHistory();
+      } else if (section === 'eco') {
+        document.getElementById('view-customer-eco').classList.remove('hidden');
+        renderEcoImpactDashboard();
+      }
+    }
+
+    function navigateAdmin(section) {
+      if (!currentUser || currentUser.account_type !== 'admin') {
+        showToast('Access denied: Admin privileges required.', 'error');
+        return;
+      }
+      activeView = `admin-${section}`;
+      hideAllViews();
+
+      renderRoleNav([
+        { key: 'pos', label: 'Admin POS Terminal', action: "navigateAdmin('pos')" },
+        { key: 'inventory', label: 'Inventory Management', action: "navigateAdmin('inventory')" }
+      ], section);
+
+      if (section === 'pos') {
+        document.getElementById('view-admin-pos').classList.remove('hidden');
+        populatePosCustomerDropdown();
+        renderAdminPOS();
+      } else if (section === 'inventory') {
+        document.getElementById('view-admin-inventory').classList.remove('hidden');
+        renderAdminInventory();
+      }
+    }
+
+    /**
+     * =========================================================================
+     * 6. SHARED ATOMIC SALE-PROCESSING SERVICE (Section 6.4)
+     * =========================================================================
+     * Single source of truth used by BOTH Customer Checkout and Admin POS.
+     * Validates stock, prevents negative inventory, recalculates decimal totals,
+     * inserts transaction + transaction_details + digital_receipt + eco_impact
+     * atomically, and guards against duplicate submissions.
+     */
+    function processAtomicSale({ accountId, lineItems }) {
+      if (isProcessingSale) {
+        return { ok: false, error: 'Sale is already being processed. Please wait.' };
+      }
+
+      isProcessingSale = true;
+      try {
+        // 1. Validate customer account exists and is a customer
+        const buyer = db.accounts.find(a => a.account_id === Number(accountId) && a.account_type === 'customer');
+        if (!buyer) {
+          return { ok: false, error: 'Valid customer account selection is required.' };
+        }
+
+        if (!Array.isArray(lineItems) || lineItems.length === 0) {
+          return { ok: false, error: 'Cannot complete a sale with an empty cart.' };
+        }
+
+        // 2. Validate stock availability and recalculate exact server-side subtotals
+        const validatedLines = [];
+        let totalCents = 0;
+
+        for (const item of lineItems) {
+          const qty = Math.floor(Number(item.quantity));
+          if (!Number.isFinite(qty) || qty <= 0) {
+            return { ok: false, error: 'Invalid item quantity detected.' };
+          }
+
+          const product = db.products.find(p => p.product_id === Number(item.product_id));
+          const inv = db.inventory.find(i => i.product_id === Number(item.product_id));
+
+          if (!product || !inv) {
+            return { ok: false, error: `Product ID ${item.product_id} was not found.` };
+          }
+
+          if (inv.quantity < qty) {
+            return {
+              ok: false,
+              error: `Insufficient stock for "${product.product_name}" (Requested: ${qty}, Available: ${inv.quantity}).`
+            };
+          }
+
+          const unitCents = Math.round(product.price * 100);
+          const subtotalCents = unitCents * qty;
+          totalCents += subtotalCents;
+
+          validatedLines.push({
+            product,
+            inv,
+            quantity: qty,
+            subtotal: subtotalCents / 100
+          });
+        }
+
+        // 3. Commit all state mutations atomically
+        const now = formatTimestamp();
+        const newTxId = db.transactions.length > 0
+          ? Math.max(...db.transactions.map(t => t.transaction_id)) + 1
+          : 1001;
+
+        const transactionRecord = {
+          transaction_id: newTxId,
+          account_id: buyer.account_id,
+          transaction_date: now,
+          total_amount: Number((totalCents / 100).toFixed(2))
+        };
+        db.transactions.push(transactionRecord);
+
+        let nextDetailId = db.transaction_details.length > 0
+          ? Math.max(...db.transaction_details.map(d => d.detail_id)) + 1
+          : 1;
+
+        for (const line of validatedLines) {
+          // Insert transaction_detail
+          db.transaction_details.push({
+            detail_id: nextDetailId++,
+            transaction_id: newTxId,
+            product_id: line.product.product_id,
+            quantity: line.quantity,
+            subtotal: Number(line.subtotal.toFixed(2))
+          });
+
+          // Decrement inventory and synchronize stock_status
+          line.inv.quantity -= line.quantity;
+          line.inv.stock_status = deriveStockStatus(line.inv.quantity);
+        }
+
+        // Generate unique opaque QR token & insert digital_receipt
+        let token = generateOpaqueReceiptToken();
+        while (db.digital_receipts.some(r => r.qr_code === token)) {
+          token = generateOpaqueReceiptToken();
+        }
+
+        const newReceiptId = db.digital_receipts.length > 0
+          ? Math.max(...db.digital_receipts.map(r => r.receipt_id)) + 1
+          : 501;
+
+        const receiptRecord = {
+          receipt_id: newReceiptId,
+          transaction_id: newTxId,
+          qr_code: token,
+          receipt_date: now
+        };
+        db.digital_receipts.push(receiptRecord);
+
+        // Calculate & insert 1-to-1 eco_impact record
+        const ecoCalc = calculateEcoMetrics(validatedLines.length);
+        const newImpactId = db.eco_impact.length > 0
+          ? Math.max(...db.eco_impact.map(e => e.impact_id)) + 1
+          : 801;
+
+        const ecoRecord = {
+          impact_id: newImpactId,
+          transaction_id: newTxId,
+          paper_saved: ecoCalc.paper_saved,
+          carbon_reduction: ecoCalc.carbon_reduction
+        };
+        db.eco_impact.push(ecoRecord);
+
+        return {
+          ok: true,
+          transaction: transactionRecord,
+          receipt: receiptRecord,
+          eco: ecoRecord,
+          buyer
+        };
+      } finally {
+        isProcessingSale = false;
+      }
+    }
+
+    /**
+     * =========================================================================
+     * 7. CUSTOMER PORTAL: CATALOG & CART
+     * =========================================================================
+     */
+    function renderCustomerCatalog() {
+      const search = document.getElementById('catalog-search-input').value.trim().toLowerCase();
+      const stockFilter = document.getElementById('catalog-stock-filter').value;
+      const sortBy = document.getElementById('catalog-sort-select').value;
+
+      let joined = db.products.map(p => {
+        const inv = db.inventory.find(i => i.product_id === p.product_id) || { quantity: 0, stock_status: 'Out of Stock' };
+        return { ...p, quantity: inv.quantity, stock_status: inv.stock_status };
+      });
+
+      if (search) {
+        joined = joined.filter(item =>
+          item.product_name.toLowerCase().includes(search) ||
+          item.description.toLowerCase().includes(search)
+        );
+      }
+
+      if (stockFilter === 'AVAILABLE_ONLY') {
+        joined = joined.filter(item => item.quantity > 0);
+      } else if (stockFilter !== 'ALL') {
+        joined = joined.filter(item => item.stock_status === stockFilter);
+      }
+
+      if (sortBy === 'PRICE_ASC') joined.sort((a, b) => a.price - b.price);
+      else if (sortBy === 'PRICE_DESC') joined.sort((a, b) => b.price - a.price);
+      else if (sortBy === 'NAME_ASC') joined.sort((a, b) => a.product_name.localeCompare(b.product_name));
+
+      document.getElementById('catalog-result-count').textContent = `Showing ${joined.length} eco-friendly product${joined.length === 1 ? '' : 's'}`;
+
+      const grid = document.getElementById('catalog-product-grid');
+      if (joined.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full bg-white rounded-3xl border border-slate-200 p-10 text-center">
+            <p class="text-base font-bold text-slate-800">No matching products found</p>
+            <p class="text-xs text-slate-500 mt-1">Try adjusting your search keywords or stock availability filter.</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = joined.map(item => {
+        const inCartItem = customerCart.find(c => c.product_id === item.product_id);
+        const inCartQty = inCartItem ? inCartItem.quantity : 0;
+        const remainingCanAdd = item.quantity - inCartQty;
+        const isOut = item.quantity <= 0;
+        const isMaxed = !isOut && remainingCanAdd <= 0;
+
+        return `
+          <article class="bg-white rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all p-5 flex flex-col justify-between">
+            <div>
+              <div class="flex items-start justify-between gap-3 mb-3.5">
+                ${getProductArtwork(item.product_id)}
+                <span class="px-2.5 py-1 rounded-full text-[11px] font-bold border ${getStockBadgeClasses(item.stock_status)}">
+                  ${escapeHtml(item.stock_status)} (${item.quantity})
+                </span>
+              </div>
+
+              <h3 class="text-base font-bold text-slate-900 leading-snug mb-1.5">${escapeHtml(item.product_name)}</h3>
+              <p class="text-xs text-slate-500 leading-relaxed line-clamp-2 mb-4">${escapeHtml(item.description)}</p>
+            </div>
+
+            <div class="pt-3.5 border-t border-slate-100 flex items-center justify-between gap-3">
+              <div>
+                <span class="text-[11px] font-semibold text-slate-400 block">Unit Price</span>
+                <span class="text-lg font-extrabold text-slate-900 tabular-nums">${formatCurrency(item.price)}</span>
+              </div>
+
+              <button
+                type="button"
+                onclick="addToCustomerCart(${item.product_id})"
+                ${isOut || isMaxed ? 'disabled' : ''}
+                class="px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  isOut
+                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    : isMaxed
+                      ? 'bg-brand-100 text-brand-800 cursor-not-allowed'
+                      : 'bg-brand-500 hover:bg-brand-600 text-white shadow-xs'
+                }">
+                <span>${isOut ? 'Out of Stock' : isMaxed ? `Max in Cart (${inCartQty})` : inCartQty > 0 ? `Add More (${inCartQty})` : '+ Add to Cart'}</span>
+              </button>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    function addToCustomerCart(productId) {
+      const inv = db.inventory.find(i => i.product_id === productId);
+      const prod = db.products.find(p => p.product_id === productId);
+      if (!inv || !prod || inv.quantity <= 0) {
+        showToast('This item is currently out of stock.', 'error');
+        return;
+      }
+
+      const existing = customerCart.find(c => c.product_id === productId);
+      if (existing) {
+        if (existing.quantity >= inv.quantity) {
+          showToast(`Maximum available stock (${inv.quantity}) already in cart.`, 'warning');
+          return;
+        }
+        existing.quantity += 1;
+      } else {
+        customerCart.push({ product_id: productId, quantity: 1 });
+      }
+
+      renderCustomerCatalog();
+      renderCustomerCart();
+      showToast(`Added ${prod.product_name} to cart.`);
+    }
+
+    function updateCustomerCartQty(productId, delta) {
+      const idx = customerCart.findIndex(c => c.product_id === productId);
+      if (idx === -1) return;
+
+      const inv = db.inventory.find(i => i.product_id === productId);
+      const maxStock = inv ? inv.quantity : 0;
+      const nextQty = customerCart[idx].quantity + delta;
+
+      if (nextQty <= 0) {
+        customerCart.splice(idx, 1);
+      } else if (nextQty > maxStock) {
+        showToast(`Cannot exceed available stock (${maxStock}).`, 'warning');
+        return;
+      } else {
+        customerCart[idx].quantity = nextQty;
+      }
+
+      renderCustomerCatalog();
+      renderCustomerCart();
+    }
+
+    function renderCustomerCart() {
+      const totalItems = customerCart.reduce((sum, item) => sum + item.quantity, 0);
+      document.getElementById('header-cart-badge').textContent = totalItems;
+
+      let subtotalCents = 0;
+      const enriched = customerCart.map(item => {
+        const prod = db.products.find(p => p.product_id === item.product_id);
+        const inv = db.inventory.find(i => i.product_id === item.product_id);
+        const lineCents = Math.round(prod.price * 100) * item.quantity;
+        subtotalCents += lineCents;
+        return {
+          ...item,
+          product_name: prod.product_name,
+          price: prod.price,
+          maxStock: inv ? inv.quantity : 0,
+          subtotal: lineCents / 100
+        };
+      });
+
+      const ecoPreview = enriched.length > 0 ? calculateEcoMetrics(enriched.length) : { paper_saved: 0, carbon_reduction: 0 };
+
+      const buildHtml = (isDrawer) => `
+        <div class="p-5 bg-slate-900 text-white flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-bold">Shopping Cart</h2>
+            <p class="text-xs text-slate-400">${totalItems} item${totalItems === 1 ? '' : 's'} selected</p>
+          </div>
+          ${isDrawer
+            ? `<button type="button" onclick="toggleMobileCart(false)" class="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+               </button>`
+            : `<span class="px-2.5 py-1 rounded-lg bg-brand-500/20 text-brand-300 text-xs font-bold">Paperless</span>`
+          }
+        </div>
+
+        <div class="p-5 flex-1 overflow-y-auto space-y-3 ${isDrawer ? '' : 'max-h-[420px]'}">
+          ${enriched.length === 0
+            ? `<div class="py-10 text-center">
+                <p class="text-sm font-bold text-slate-700">Your cart is empty</p>
+                <p class="text-xs text-slate-400 mt-1">Select eco-friendly items from the catalog to start.</p>
+               </div>`
+            : enriched.map(item => `
+                <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-3">
+                  <div class="min-w-0 flex-1">
+                    <p class="text-xs font-bold text-slate-900 truncate">${escapeHtml(item.product_name)}</p>
+                    <p class="text-[11px] text-slate-500 tabular-nums">${formatCurrency(item.price)} each &bull; Stock: ${item.maxStock}</p>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="updateCustomerCartQty(${item.product_id}, -1)" class="w-7 h-7 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-xs font-bold text-slate-700">-</button>
+                    <span class="w-6 text-center text-xs font-bold tabular-nums">${item.quantity}</span>
+                    <button type="button" onclick="updateCustomerCartQty(${item.product_id}, 1)" class="w-7 h-7 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-xs font-bold text-slate-700">+</button>
+                  </div>
+                  <div class="text-right min-w-[68px]">
+                    <span class="text-xs font-extrabold text-slate-900 tabular-nums">${formatCurrency(item.subtotal)}</span>
+                  </div>
+                </div>
+              `).join('')
+          }
+        </div>
+
+        <div class="p-5 border-t border-slate-200 bg-slate-50/70 space-y-3">
+          <div class="flex items-center justify-between text-xs text-brand-700 bg-brand-50 px-3 py-2 rounded-xl border border-brand-200/70">
+            <span class="font-semibold">Est. Eco-Impact:</span>
+            <span class="font-bold tabular-nums">${ecoPreview.paper_saved.toFixed(2)} sheets &bull; ${ecoPreview.carbon_reduction.toFixed(2)} g CO&#8322;e</span>
+          </div>
+
+          <div class="flex items-baseline justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Total Amount</span>
+            <span class="text-xl font-extrabold text-slate-900 tabular-nums">${formatCurrency(subtotalCents / 100)}</span>
+          </div>
+
+          <button
+            type="button"
+            onclick="handleCustomerCheckout()"
+            ${enriched.length === 0 ? 'disabled' : ''}
+            class="w-full py-3.5 px-4 rounded-2xl bg-brand-500 hover:bg-brand-600 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold text-xs shadow-md shadow-brand-500/20 transition-all">
+            Checkout &amp; Generate QR Receipt
+          </button>
+        </div>
+      `;
+
+      document.getElementById('desktop-cart-container').innerHTML = buildHtml(false);
+      document.getElementById('mobile-cart-container').innerHTML = buildHtml(true);
+    }
+
+    function toggleMobileCart(open) {
+      const drawer = document.getElementById('mobile-cart-drawer');
+      if (open) {
+        renderCustomerCart();
+        drawer.classList.remove('hidden');
+      } else {
+        drawer.classList.add('hidden');
+      }
+    }
+
+    function handleCustomerCheckout() {
+      if (!currentUser || currentUser.account_type !== 'customer') return;
+      const result = processAtomicSale({
+        accountId: currentUser.account_id,
+        lineItems: customerCart
+      });
+
+      if (!result.ok) {
+        showToast(result.error, 'error');
+        return;
+      }
+
+      customerCart = [];
+      toggleMobileCart(false);
+      selectedReceiptToken = result.receipt.qr_code;
+      renderCustomerCatalog();
+      renderCustomerCart();
+      openSaleSuccessModal(result, 'customer');
+    }
+
+    /**
+     * =========================================================================
+     * 8. DIGITAL RECEIPT / QR VIEW & PURCHASE HISTORY (Screens 3 & 4)
+     * =========================================================================
+     */
+    function handleTokenLookup(e) {
+      e.preventDefault();
+      const rawToken = document.getElementById('receipt-token-input').value.trim().toUpperCase();
+      const alertBox = document.getElementById('receipt-lookup-alert');
+
+      if (!rawToken) {
+        alertBox.textContent = 'Please enter a QR receipt token to verify.';
+        alertBox.classList.remove('hidden');
+        return;
+      }
+
+      const receipt = db.digital_receipts.find(r => r.qr_code.toUpperCase() === rawToken);
+      if (!receipt) {
+        // Test Matrix requirement: invalid token must fail safely without disclosing data
+        alertBox.textContent = `Verification failed: No digital receipt matches token "${rawToken}".`;
+        alertBox.classList.remove('hidden');
+        return;
+      }
+
+      // Enforce customer ownership check on customer portal
+      const tx = db.transactions.find(t => t.transaction_id === receipt.transaction_id);
+      if (currentUser && currentUser.account_type === 'customer' && tx.account_id !== currentUser.account_id) {
+        alertBox.textContent = 'Access denied: That digital receipt belongs to a different customer account.';
+        alertBox.classList.remove('hidden');
+        return;
+      }
+
+      alertBox.classList.add('hidden');
+      selectedReceiptToken = receipt.qr_code;
+      renderDigitalReceipt(selectedReceiptToken);
+      showToast('QR Receipt token verified.');
+    }
+
+    function viewCustomerReceiptByToken(token) {
+      selectedReceiptToken = token;
+      navigateCustomer('receipt');
+    }
+
+    function renderDigitalReceipt(token) {
+      const container = document.getElementById('printable-receipt-area');
+      const receipt = db.digital_receipts.find(r => r.qr_code === token);
+
+      if (!receipt) {
+        container.innerHTML = `
+          <div class="p-10 text-center">
+            <p class="text-base font-bold text-slate-800">No Digital Receipt Selected</p>
+            <p class="text-xs text-slate-500 mt-1">Complete a purchase or select a row from Purchase History to inspect its QR receipt.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const tx = db.transactions.find(t => t.transaction_id === receipt.transaction_id);
+      const buyer = db.accounts.find(a => a.account_id === tx.account_id);
+      const eco = db.eco_impact.find(e => e.transaction_id === tx.transaction_id);
+      const details = db.transaction_details.filter(d => d.transaction_id === tx.transaction_id);
+
+      document.getElementById('receipt-token-input').value = receipt.qr_code;
+
+      const qrPayload = `GREENCART://RECEIPT/${receipt.qr_code}`;
+      const qrSvg = QREncoder.renderSvg(qrPayload, 168);
+
+      container.innerHTML = `
+        <div class="bg-slate-900 text-white p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-brand-500/20 text-brand-300 text-xs font-bold mb-2">
+              <span>Verified Paperless Receipt</span>
+            </div>
+            <h1 class="text-2xl font-extrabold tracking-tight">GreenCart Official Digital Receipt</h1>
+            <p class="text-xs text-slate-400 font-mono mt-1">Receipt #${receipt.receipt_id} &bull; Transaction #${tx.transaction_id}</p>
+          </div>
+          <button type="button" onclick="window.print()" class="no-print self-start sm:self-auto px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-colors">
+            Print / Save PDF
+          </button>
+        </div>
+
+        <div class="p-6 sm:p-8 grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+          <!-- Line Items & Total -->
+          <div class="md:col-span-7 space-y-5">
+            <div class="grid grid-cols-2 gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200/70 text-xs">
+              <div>
+                <span class="text-slate-400 block">Customer Account</span>
+                <span class="font-bold text-slate-900">${escapeHtml(buyer ? buyer.full_name : 'Customer')}</span>
+                <span class="font-mono text-[11px] text-slate-500 block">@${escapeHtml(buyer ? buyer.username : '')}</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block">Receipt Timestamp</span>
+                <span class="font-bold text-slate-900 font-mono">${escapeHtml(receipt.receipt_date)}</span>
+              </div>
+            </div>
+
+            <div>
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Purchased Items (<code class="font-mono">transaction_details</code>)</h3>
+              <div class="divide-y divide-slate-100 border-t border-b border-slate-200">
+                ${details.map(d => {
+                  const prod = db.products.find(p => p.product_id === d.product_id);
+                  return `
+                    <div class="py-3 flex items-center justify-between gap-4 text-sm">
+                      <div>
+                        <p class="font-bold text-slate-900">${escapeHtml(prod ? prod.product_name : `Product #${d.product_id}`)}</p>
+                        <p class="text-xs text-slate-500 tabular-nums">Qty: ${d.quantity} &times; ${formatCurrency(prod ? prod.price : d.subtotal / d.quantity)}</p>
+                      </div>
+                      <span class="font-extrabold text-slate-900 tabular-nums">${formatCurrency(d.subtotal)}</span>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+
+            <div class="flex items-baseline justify-between pt-1">
+              <span class="text-sm font-bold text-slate-600">Total Paid</span>
+              <span class="text-2xl font-extrabold text-slate-900 tabular-nums">${formatCurrency(tx.total_amount)}</span>
+            </div>
+          </div>
+
+          <!-- QR Code & Eco-Impact Card (Matches Wireframe Slide 4) -->
+          <div class="md:col-span-5 space-y-4">
+            <div class="p-5 rounded-3xl bg-slate-50 border border-slate-200 text-center flex flex-col items-center">
+              ${qrSvg}
+              <span class="mt-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Opaque QR Receipt Token</span>
+              <code class="mt-1 px-3 py-1 rounded-lg bg-white border border-slate-200 font-mono text-xs font-bold text-slate-800 select-all">${escapeHtml(receipt.qr_code)}</code>
+              <p class="text-[11px] text-slate-400 mt-2">Contains locator token only; zero personal credentials encoded.</p>
+            </div>
+
+            <div class="p-5 rounded-3xl bg-brand-50 border border-brand-200 space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-extrabold uppercase tracking-wider text-brand-800">Transaction Eco-Impact</span>
+                <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-brand-200/70 text-brand-900">Estimated</span>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="p-3 rounded-2xl bg-white border border-brand-100">
+                  <span class="text-[11px] text-slate-500 block">Paper Saved</span>
+                  <span class="text-lg font-extrabold text-brand-700 tabular-nums">${eco ? eco.paper_saved.toFixed(2) : '0.00'} <span class="text-xs font-semibold">sheets</span></span>
+                </div>
+                <div class="p-3 rounded-2xl bg-white border border-brand-100">
+                  <span class="text-[11px] text-slate-500 block">Carbon Reduced</span>
+                  <span class="text-lg font-extrabold text-brand-700 tabular-nums">${eco ? eco.carbon_reduction.toFixed(2) : '0.00'} <span class="text-xs font-semibold">g CO&#8322;e</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderPurchaseHistory() {
+      const tbody = document.getElementById('purchase-history-tbody');
+      // Scoped strictly to logged-in customer account_id
+      const userTxs = db.transactions
+        .filter(t => t.account_id === currentUser.account_id)
+        .sort((a, b) => b.transaction_id - a.transaction_id);
+
+      if (userTxs.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="py-12 px-5 text-center text-slate-500">
+              <p class="font-bold text-slate-800">No transactions recorded yet</p>
+              <p class="text-xs mt-1">Browse the Product Catalog to complete your first paperless purchase.</p>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = userTxs.map(tx => {
+        const details = db.transaction_details.filter(d => d.transaction_id === tx.transaction_id);
+        const totalUnits = details.reduce((s, d) => s + d.quantity, 0);
+        const receipt = db.digital_receipts.find(r => r.transaction_id === tx.transaction_id);
+        const eco = db.eco_impact.find(e => e.transaction_id === tx.transaction_id);
+
+        return `
+          <tr class="hover:bg-slate-50/80 transition-colors">
+            <td class="py-4 px-5 font-mono font-bold text-slate-900">#${tx.transaction_id}</td>
+            <td class="py-4 px-5 text-xs font-mono text-slate-600">${escapeHtml(tx.transaction_date)}</td>
+            <td class="py-4 px-5 text-xs font-semibold text-slate-700">${totalUnits} unit${totalUnits === 1 ? '' : 's'} (${details.length} item${details.length === 1 ? '' : 's'})</td>
+            <td class="py-4 px-5 font-extrabold text-slate-900 tabular-nums">${formatCurrency(tx.total_amount)}</td>
+            <td class="py-4 px-5 text-xs font-semibold text-brand-700 tabular-nums">
+              ${eco ? `${eco.paper_saved.toFixed(2)} sheets &bull; ${eco.carbon_reduction.toFixed(2)} g CO&#8322;e` : '—'}
+            </td>
+            <td class="py-4 px-5 text-right">
+              ${receipt
+                ? `<button type="button" onclick="viewCustomerReceiptByToken('${escapeHtml(receipt.qr_code)}')" class="px-3.5 py-2 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 border border-brand-200 text-xs font-bold transition-colors">
+                    View Receipt
+                   </button>`
+                : '<span class="text-xs text-slate-400">Pending</span>'
+              }
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    /**
+     * =========================================================================
+     * 9. ECO-IMPACT DASHBOARD (Screen 5)
+     * =========================================================================
+     */
+    function setEcoScope(scope) {
+      ecoScope = scope;
+      const btnPersonal = document.getElementById('eco-scope-personal');
+      const btnStore = document.getElementById('eco-scope-store');
+
+      if (scope === 'personal') {
+        btnPersonal.className = 'px-4 py-2 rounded-xl text-xs font-bold bg-brand-500 text-white transition-all';
+        btnStore.className = 'px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 transition-all';
+      } else {
+        btnStore.className = 'px-4 py-2 rounded-xl text-xs font-bold bg-brand-500 text-white transition-all';
+        btnPersonal.className = 'px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 transition-all';
+      }
+      renderEcoImpactDashboard();
+    }
+
+    function renderEcoImpactDashboard() {
+      const relevantTxs = ecoScope === 'personal'
+        ? db.transactions.filter(t => t.account_id === currentUser.account_id)
+        : db.transactions;
+
+      const txMap = new Map(relevantTxs.map(t => [t.transaction_id, t]));
+      const impacts = db.eco_impact
+        .filter(e => txMap.has(e.transaction_id))
+        .sort((a, b) => b.transaction_id - a.transaction_id);
+
+      const paperlessCount = impacts.length;
+      const totalPaper = impacts.reduce((sum, e) => sum + e.paper_saved, 0);
+      const totalCarbon = impacts.reduce((sum, e) => sum + e.carbon_reduction, 0);
+
+      document.getElementById('eco-ledger-scope-label').textContent =
+        ecoScope === 'personal' ? `Scope: @${currentUser.username}` : 'Scope: All Store Transactions';
+
+      document.getElementById('eco-kpi-grid').innerHTML = `
+        <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-6">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Paperless Transactions</span>
+            <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold">Verified Count</span>
+          </div>
+          <p class="text-3xl font-extrabold text-slate-900 tabular-nums">${paperlessCount}</p>
+          <p class="text-xs text-slate-500 mt-1">Completed sales with QR digital receipts</p>
+        </div>
+
+        <div class="bg-white rounded-3xl border border-brand-200/90 shadow-sm p-6">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold uppercase tracking-wider text-brand-700">Paper Saved</span>
+            <span class="px-2 py-0.5 rounded-md bg-brand-50 text-brand-800 text-[10px] font-bold">Estimated</span>
+          </div>
+          <p class="text-3xl font-extrabold text-brand-700 tabular-nums">${totalPaper.toFixed(2)} <span class="text-base font-bold">sheets</span></p>
+          <p class="text-xs text-slate-500 mt-1">Thermal receipt paper avoided</p>
+        </div>
+
+        <div class="bg-white rounded-3xl border border-brand-200/90 shadow-sm p-6">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold uppercase tracking-wider text-brand-700">Carbon Reduction</span>
+            <span class="px-2 py-0.5 rounded-md bg-brand-50 text-brand-800 text-[10px] font-bold">Estimated</span>
+          </div>
+          <p class="text-3xl font-extrabold text-brand-700 tabular-nums">${totalCarbon.toFixed(2)} <span class="text-base font-bold">g CO&#8322;e</span></p>
+          <p class="text-xs text-slate-500 mt-1">Projected footprint reduction</p>
+        </div>
+      `;
+
+      const tbody = document.getElementById('eco-ledger-tbody');
+      if (impacts.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="py-10 px-5 text-center text-xs text-slate-500">No Eco-Impact records found in this scope yet.</td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = impacts.map(e => {
+        const tx = txMap.get(e.transaction_id);
+        return `
+          <tr class="hover:bg-slate-50/70">
+            <td class="py-3.5 px-5 font-mono text-xs font-bold text-slate-700">#${e.impact_id}</td>
+            <td class="py-3.5 px-5 font-mono text-xs font-bold text-brand-700">#${e.transaction_id}</td>
+            <td class="py-3.5 px-5 font-mono text-xs text-slate-500">${escapeHtml(tx ? tx.transaction_date : '')}</td>
+            <td class="py-3.5 px-5 font-bold text-slate-800 tabular-nums">${e.paper_saved.toFixed(2)} sheets</td>
+            <td class="py-3.5 px-5 font-bold text-brand-700 tabular-nums">${e.carbon_reduction.toFixed(2)} g CO&#8322;e</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    /**
+     * =========================================================================
+     * 10. ADMIN POS TERMINAL (Screen 6)
+     * =========================================================================
+     */
+    function populatePosCustomerDropdown() {
+      const select = document.getElementById('pos-customer-select');
+      const customers = db.accounts.filter(a => a.account_type === 'customer');
+      select.innerHTML = customers.map(c =>
+        `<option value="${c.account_id}" ${c.username === 'walkin_customer' ? 'selected' : ''}>${escapeHtml(c.full_name)} (@${escapeHtml(c.username)})</option>`
+      ).join('');
+    }
+
+    function renderAdminPOS() {
+      const search = document.getElementById('pos-search-input').value.trim().toLowerCase();
+      const stockFilter = document.getElementById('pos-stock-filter').value;
+
+      let items = db.products.map(p => {
+        const inv = db.inventory.find(i => i.product_id === p.product_id) || { quantity: 0, stock_status: 'Out of Stock' };
+        return { ...p, quantity: inv.quantity, stock_status: inv.stock_status };
+      });
+
+      if (search) {
+        items = items.filter(i =>
+          i.product_name.toLowerCase().includes(search) ||
+          String(i.product_id).includes(search)
+        );
+      }
+      if (stockFilter === 'AVAILABLE') {
+        items = items.filter(i => i.quantity > 0);
+      }
+
+      const grid = document.getElementById('pos-product-grid');
+      grid.innerHTML = items.map(item => {
+        const inSale = posCart.find(c => c.product_id === item.product_id);
+        const inSaleQty = inSale ? inSale.quantity : 0;
+        const isOut = item.quantity <= 0;
+        const isMaxed = !isOut && inSaleQty >= item.quantity;
+
+        return `
+          <button
+            type="button"
+            onclick="addToPosCart(${item.product_id})"
+            ${isOut || isMaxed ? 'disabled' : ''}
+            class="text-left p-4 rounded-2xl border transition-all flex flex-col justify-between ${
+              isOut
+                ? 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed'
+                : inSaleQty > 0
+                  ? 'bg-brand-50/60 border-brand-400 shadow-xs'
+                  : 'bg-white border-slate-200 hover:border-brand-400 hover:shadow-xs'
+            }">
+            <div class="flex items-start justify-between gap-2 mb-2">
+              <span class="text-[11px] font-mono text-slate-400">#${item.product_id}</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${getStockBadgeClasses(item.stock_status)}">
+                ${item.quantity} left
+              </span>
+            </div>
+            <p class="text-sm font-bold text-slate-900 leading-snug mb-2">${escapeHtml(item.product_name)}</p>
+            <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+              <span class="text-sm font-extrabold text-slate-900 tabular-nums">${formatCurrency(item.price)}</span>
+              <span class="text-[11px] font-bold ${inSaleQty > 0 ? 'text-brand-700' : 'text-slate-400'}">
+                ${isOut ? 'Unavailable' : inSaleQty > 0 ? `In Sale: ${inSaleQty}` : '+ Add'}
+              </span>
+            </div>
+          </button>
+        `;
+      }).join('');
+
+      renderPosCurrentSalePanel();
+    }
+
+    function addToPosCart(productId) {
+      const inv = db.inventory.find(i => i.product_id === productId);
+      if (!inv || inv.quantity <= 0) return;
+
+      const existing = posCart.find(c => c.product_id === productId);
+      if (existing) {
+        if (existing.quantity >= inv.quantity) {
+          showToast(`Stock limit (${inv.quantity}) reached for this product.`, 'warning');
+          return;
+        }
+        existing.quantity += 1;
+      } else {
+        posCart.push({ product_id: productId, quantity: 1 });
+      }
+      renderAdminPOS();
+    }
+
+    function updatePosCartQty(productId, delta) {
+      const idx = posCart.findIndex(c => c.product_id === productId);
+      if (idx === -1) return;
+
+      const inv = db.inventory.find(i => i.product_id === productId);
+      const maxStock = inv ? inv.quantity : 0;
+      const nextQty = posCart[idx].quantity + delta;
+
+      if (nextQty <= 0) {
+        posCart.splice(idx, 1);
+      } else if (nextQty > maxStock) {
+        showToast(`Cannot exceed available stock (${maxStock}).`, 'warning');
+        return;
+      } else {
+        posCart[idx].quantity = nextQty;
+      }
+      renderAdminPOS();
+    }
+
+    function clearPosCart() {
+      posCart = [];
+      renderAdminPOS();
+    }
+
+    function renderPosCurrentSalePanel() {
+      const container = document.getElementById('pos-sale-items');
+      let totalCents = 0;
+
+      const enriched = posCart.map(item => {
+        const prod = db.products.find(p => p.product_id === item.product_id);
+        const inv = db.inventory.find(i => i.product_id === item.product_id);
+        const subCents = Math.round(prod.price * 100) * item.quantity;
+        totalCents += subCents;
+        return {
+          ...item,
+          product_name: prod.product_name,
+          price: prod.price,
+          maxStock: inv ? inv.quantity : 0,
+          subtotal: subCents / 100
+        };
+      });
+
+      if (enriched.length === 0) {
+        container.innerHTML = `
+          <div class="py-8 text-center">
+            <p class="text-xs font-bold text-slate-600">No items in current sale</p>
+            <p class="text-[11px] text-slate-400 mt-0.5">Tap products on the left to add them to the sale.</p>
+          </div>
+        `;
+      } else {
+        container.innerHTML = enriched.map(item => `
+          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <p class="text-xs font-bold text-slate-900 truncate">${escapeHtml(item.product_name)}</p>
+              <p class="text-[11px] text-slate-500 tabular-nums">${formatCurrency(item.price)} &bull; Max ${item.maxStock}</p>
+            </div>
+            <div class="flex items-center gap-1">
+              <button type="button" onclick="updatePosCartQty(${item.product_id}, -1)" class="w-7 h-7 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-xs font-bold">-</button>
+              <span class="w-6 text-center text-xs font-bold tabular-nums">${item.quantity}</span>
+              <button type="button" onclick="updatePosCartQty(${item.product_id}, 1)" class="w-7 h-7 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-xs font-bold">+</button>
+            </div>
+            <div class="text-right min-w-[68px]">
+              <span class="text-xs font-extrabold text-slate-900 tabular-nums">${formatCurrency(item.subtotal)}</span>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      const eco = enriched.length > 0 ? calculateEcoMetrics(enriched.length) : { paper_saved: 0, carbon_reduction: 0 };
+      document.getElementById('pos-line-count').textContent = enriched.length;
+      document.getElementById('pos-eco-preview').textContent = `${eco.paper_saved.toFixed(2)} sheets • ${eco.carbon_reduction.toFixed(2)} g CO₂e`;
+      document.getElementById('pos-total-amount').textContent = formatCurrency(totalCents / 100);
+      document.getElementById('pos-complete-btn').disabled = enriched.length === 0;
+    }
+
+    function handlePosCheckout() {
+      if (!currentUser || currentUser.account_type !== 'admin') return;
+      const customerId = Number(document.getElementById('pos-customer-select').value);
+
+      const result = processAtomicSale({
+        accountId: customerId,
+        lineItems: posCart
+      });
+
+      if (!result.ok) {
+        showToast(result.error, 'error');
+        return;
+      }
+
+      posCart = [];
+      renderAdminPOS();
+      openSaleSuccessModal(result, 'admin');
+    }
+
+    /**
+     * =========================================================================
+     * 11. SALE COMPLETION & QR RECEIPT MODAL
+     * =========================================================================
+     */
+    function openSaleSuccessModal(result, originRole) {
+      const modal = document.getElementById('sale-success-modal');
+      const body = document.getElementById('sale-success-modal-body');
+      const qrSvg = QREncoder.renderSvg(`GREENCART://RECEIPT/${result.receipt.qr_code}`, 176);
+
+      body.innerHTML = `
+        <div class="p-6 bg-brand-600 text-white text-center">
+          <div class="w-11 h-11 rounded-full bg-white/20 mx-auto flex items-center justify-center mb-2">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <h3 class="text-lg font-extrabold">Sale Completed &amp; QR Generated</h3>
+          <p class="text-xs text-brand-100 mt-0.5">Transaction #${result.transaction.transaction_id} committed atomically</p>
+        </div>
+
+        <div class="p-6 space-y-4 text-center">
+          <div class="flex flex-col items-center">
+            ${qrSvg}
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-2.5">Digital Receipt Token</span>
+            <code class="px-3 py-1 rounded-lg bg-slate-100 font-mono text-xs font-bold text-slate-900 mt-1 select-all">${escapeHtml(result.receipt.qr_code)}</code>
+          </div>
+
+          <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs space-y-1.5 text-left">
+            <div class="flex justify-between">
+              <span class="text-slate-500">Customer Account:</span>
+              <span class="font-bold text-slate-900">${escapeHtml(result.buyer.full_name)} (@${escapeHtml(result.buyer.username)})</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">Total Paid:</span>
+              <span class="font-extrabold text-slate-900 tabular-nums">${formatCurrency(result.transaction.total_amount)}</span>
+            </div>
+            <div class="flex justify-between text-brand-700">
+              <span>Est. Eco-Impact:</span>
+              <span class="font-bold tabular-nums">${result.eco.paper_saved.toFixed(2)} sheets &bull; ${result.eco.carbon_reduction.toFixed(2)} g CO&#8322;e</span>
+            </div>
+          </div>
+
+          <div class="flex gap-2.5 pt-1">
+            ${originRole === 'customer'
+              ? `<button type="button" onclick="closeSaleSuccessModal(); navigateCustomer('receipt');" class="flex-1 py-3 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold">Open Full Receipt</button>`
+              : `<button type="button" onclick="closeSaleSuccessModal()" class="flex-1 py-3 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold">Start Next POS Sale</button>`
+            }
+            <button type="button" onclick="closeSaleSuccessModal()" class="px-4 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50">Close</button>
+          </div>
+        </div>
+      `;
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeSaleSuccessModal() {
+      document.getElementById('sale-success-modal').classList.add('hidden');
+    }
+
+    /**
+     * =========================================================================
+     * 12. ADMIN INVENTORY MANAGEMENT (Screen 7)
+     * =========================================================================
+     */
+    function renderAdminInventory() {
+      const search = document.getElementById('inv-search-input').value.trim().toLowerCase();
+      const statusFilter = document.getElementById('inv-status-filter').value;
+
+      const joined = db.products.map(p => {
+        const inv = db.inventory.find(i => i.product_id === p.product_id) || { inventory_id: 0, quantity: 0, stock_status: 'Out of Stock' };
+        return { ...p, inventory_id: inv.inventory_id, quantity: inv.quantity, stock_status: inv.stock_status };
+      });
+
+      const totalCount = joined.length;
+      const inStockCount = joined.filter(i => i.stock_status === 'In Stock').length;
+      const lowStockCount = joined.filter(i => i.stock_status === 'Low Stock').length;
+      const outStockCount = joined.filter(i => i.stock_status === 'Out of Stock').length;
+
+      document.getElementById('inventory-summary-cards').innerHTML = `
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Products</span>
+          <p class="text-2xl font-extrabold text-slate-900 tabular-nums mt-1">${totalCount}</p>
+        </div>
+        <div class="bg-white p-4 rounded-2xl border border-brand-200 shadow-xs">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-brand-700">In Stock (&gt; 10)</span>
+          <p class="text-2xl font-extrabold text-brand-700 tabular-nums mt-1">${inStockCount}</p>
+        </div>
+        <div class="bg-white p-4 rounded-2xl border border-amber-200 shadow-xs">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-amber-700">Low Stock (1–10)</span>
+          <p class="text-2xl font-extrabold text-amber-700 tabular-nums mt-1">${lowStockCount}</p>
+        </div>
+        <div class="bg-white p-4 rounded-2xl border border-red-200 shadow-xs">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-red-700">Out of Stock (0)</span>
+          <p class="text-2xl font-extrabold text-red-700 tabular-nums mt-1">${outStockCount}</p>
+        </div>
+      `;
+
+      let filtered = joined;
+      if (search) {
+        filtered = filtered.filter(i =>
+          i.product_name.toLowerCase().includes(search) ||
+          i.description.toLowerCase().includes(search)
+        );
+      }
+      if (statusFilter !== 'ALL') {
+        filtered = filtered.filter(i => i.stock_status === statusFilter);
+      }
+
+      const tbody = document.getElementById('inventory-tbody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="py-10 px-5 text-center text-xs text-slate-500">No inventory records match the current filter.</td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(item => `
+        <tr class="hover:bg-slate-50/70 transition-colors">
+          <td class="py-4 px-5 font-mono text-xs font-bold text-slate-600">#${item.product_id}</td>
+          <td class="py-4 px-5">
+            <p class="font-bold text-slate-900">${escapeHtml(item.product_name)}</p>
+            <p class="text-xs text-slate-500 line-clamp-1 max-w-md">${escapeHtml(item.description)}</p>
+          </td>
+          <td class="py-4 px-5 font-bold text-slate-900 tabular-nums">${formatCurrency(item.price)}</td>
+          <td class="py-4 px-5">
+            <div class="inline-flex items-center gap-1.5">
+              <button type="button" onclick="adjustInventoryQuick(${item.product_id}, -1)" class="w-7 h-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-xs font-bold text-slate-700" title="Decrease stock by 1">-</button>
+              <span class="w-9 text-center font-extrabold text-slate-900 tabular-nums">${item.quantity}</span>
+              <button type="button" onclick="adjustInventoryQuick(${item.product_id}, 1)" class="w-7 h-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-xs font-bold text-slate-700" title="Increase stock by 1">+</button>
+            </div>
+          </td>
+          <td class="py-4 px-5">
+            <span class="px-2.5 py-1 rounded-full text-[11px] font-bold border ${getStockBadgeClasses(item.stock_status)}">
+              ${escapeHtml(item.stock_status)}
+            </span>
+          </td>
+          <td class="py-4 px-5 text-right">
+            <button type="button" onclick="openProductModal(${item.product_id})" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors">
+              Edit Product / Stock
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function adjustInventoryQuick(productId, delta) {
+      if (!currentUser || currentUser.account_type !== 'admin') return;
+      const inv = db.inventory.find(i => i.product_id === productId);
+      if (!inv) return;
+
+      const nextQty = inv.quantity + delta;
+      if (nextQty < 0) {
+        showToast('Stock quantity cannot be negative.', 'error');
+        return;
+      }
+
+      inv.quantity = nextQty;
+      inv.stock_status = deriveStockStatus(nextQty);
+      renderAdminInventory();
+    }
+
+    function openProductModal(productId = null) {
+      if (!currentUser || currentUser.account_type !== 'admin') return;
+      const modal = document.getElementById('product-modal');
+      const errBox = document.getElementById('product-modal-error');
+      errBox.classList.add('hidden');
+
+      if (productId) {
+        const prod = db.products.find(p => p.product_id === productId);
+        const inv = db.inventory.find(i => i.product_id === productId);
+        document.getElementById('product-modal-title').textContent = `Edit Product #${productId}`;
+        document.getElementById('edit-product-id').value = productId;
+        document.getElementById('prod-name-input').value = prod.product_name;
+        document.getElementById('prod-desc-input').value = prod.description;
+        document.getElementById('prod-price-input').value = prod.price.toFixed(2);
+        document.getElementById('prod-qty-input').value = inv ? inv.quantity : 0;
+      } else {
+        document.getElementById('product-modal-title').textContent = 'Add New Eco-Friendly Product';
+        document.getElementById('edit-product-id').value = '';
+        document.getElementById('prod-name-input').value = '';
+        document.getElementById('prod-desc-input').value = '';
+        document.getElementById('prod-price-input').value = '';
+        document.getElementById('prod-qty-input').value = '20';
+      }
+
+      previewStockStatusBadge();
+      modal.classList.remove('hidden');
+    }
+
+    function closeProductModal() {
+      document.getElementById('product-modal').classList.add('hidden');
+    }
+
+    function previewStockStatusBadge() {
+      const qtyVal = Math.max(0, Math.floor(Number(document.getElementById('prod-qty-input').value) || 0));
+      const status = deriveStockStatus(qtyVal);
+      const badge = document.getElementById('prod-status-preview');
+      badge.textContent = status;
+      badge.className = `px-2.5 py-1 rounded-full font-bold border ${getStockBadgeClasses(status)}`;
+    }
+
+    function handleProductModalSubmit(e) {
+      e.preventDefault();
+      if (!currentUser || currentUser.account_type !== 'admin') return;
+
+      const editIdRaw = document.getElementById('edit-product-id').value;
+      const name = document.getElementById('prod-name-input').value.trim();
+      const desc = document.getElementById('prod-desc-input').value.trim();
+      const price = Number(document.getElementById('prod-price-input').value);
+      const qty = Math.floor(Number(document.getElementById('prod-qty-input').value));
+      const errBox = document.getElementById('product-modal-error');
+
+      if (!name || !desc || !Number.isFinite(price) || price <= 0 || !Number.isFinite(qty) || qty < 0) {
+        errBox.textContent = 'Please enter a valid name, description, positive price, and non-negative integer stock quantity.';
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      const cleanPrice = Number(price.toFixed(2));
+      const status = deriveStockStatus(qty);
+
+      if (editIdRaw) {
+        const pid = Number(editIdRaw);
+        const prod = db.products.find(p => p.product_id === pid);
+        const inv = db.inventory.find(i => i.product_id === pid);
+        if (prod) {
+          prod.product_name = name;
+          prod.description = desc;
+          prod.price = cleanPrice;
+        }
+        if (inv) {
+          inv.quantity = qty;
+          inv.stock_status = status;
+        }
+        showToast(`Updated "${name}" and synchronized inventory.`);
+      } else {
+        const newPid = db.products.length > 0 ? Math.max(...db.products.map(p => p.product_id)) + 1 : 1;
+        const newInvId = db.inventory.length > 0 ? Math.max(...db.inventory.map(i => i.inventory_id)) + 1 : 1;
+
+        db.products.push({
+          product_id: newPid,
+          product_name: name,
+          description: desc,
+          price: cleanPrice
+        });
+        db.inventory.push({
+          inventory_id: newInvId,
+          product_id: newPid,
+          quantity: qty,
+          stock_status: status
+        });
+        showToast(`Added "${name}" to catalog and inventory.`);
+      }
+
+      closeProductModal();
+      renderAdminInventory();
+    }
+
+    /**
+     * =========================================================================
+     * 13. 7-ENTITY RELATIONAL DATABASE INSPECTOR (Developer / Defense Aid)
+     * =========================================================================
+     */
+    function openSchemaInspector() {
+      renderSchemaInspector();
+      document.getElementById('schema-inspector-modal').classList.remove('hidden');
+    }
+
+    function closeSchemaInspector() {
+      document.getElementById('schema-inspector-modal').classList.add('hidden');
+    }
+
+    function selectInspectorEntity(tableName) {
+      inspectorEntity = tableName;
+      renderSchemaInspector();
+    }
+
+    function renderSchemaInspector() {
+      const tables = [
+        'accounts',
+        'products',
+        'inventory',
+        'transactions',
+        'transaction_details',
+        'digital_receipts',
+        'eco_impact'
+      ];
+
+      document.getElementById('schema-entity-tabs').innerHTML = tables.map(t => {
+        const active = t === inspectorEntity;
+        return `
+          <button type="button" onclick="selectInspectorEntity('${t}')" class="px-3 py-1.5 rounded-xl font-mono text-xs font-bold whitespace-nowrap transition-all ${
+            active ? 'bg-brand-500 text-white shadow-xs' : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
+          }">
+            ${t} (${db[t].length})
+          </button>
+        `;
+      }).join('');
+
+      const rows = db[inspectorEntity].map(r => {
+        // Redact password_hash in inspector view
+        if (inspectorEntity === 'accounts') {
+          return { ...r, password_hash: '******** (hashed)' };
+        }
+        return r;
+      });
+
+      document.getElementById('schema-entity-content').innerHTML = `
+        <pre class="text-slate-800 leading-relaxed whitespace-pre-wrap">${escapeHtml(JSON.stringify(rows, null, 2))}</pre>
+      `;
+    }
+
+    function resetDemoDatabase() {
+      db = createSeedDatabase();
+      customerCart = [];
+      posCart = [];
+      renderSchemaInspector();
+      if (currentUser) {
+        if (currentUser.account_type === 'admin') navigateAdmin('pos');
+        else navigateCustomer('catalog');
+      }
+      showToast('All 7 tables restored to initial seed state.');
+    }
+
+    // Initialize default auth tab state on load
+    window.addEventListener('DOMContentLoaded', () => {
+      switchAuthTab('login');
+    });
+  </script>
+</body>
+</html>

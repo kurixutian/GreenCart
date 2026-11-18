@@ -1,0 +1,5 @@
+node_modules/
+dist/
+data/*.sqlite
+*.log
+ogani-v1.0.0.zip
