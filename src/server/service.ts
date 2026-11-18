@@ -11,6 +11,9 @@ import {
   calculateEcoMetrics,
   type AccountRow,
   type AccountType,
+  type AdminTransactionFilter,
+  type AdminTransactionItem,
+  type AdminTransactionSort,
   type CatalogItem,
   type DatabaseSnapshot,
   type DigitalReceiptRow,
@@ -45,6 +48,15 @@ export function deriveStockStatus(quantity: number, reorderLevel = 10): StockSta
   if (quantity <= 0) return 'Out of Stock';
   if (quantity <= reorderLevel) return 'Low Stock';
   return 'In Stock';
+}
+
+function sanitizeCsvCell(val: string | number | null | undefined): string {
+  const raw = val === null || val === undefined ? '' : String(val);
+  const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  if (/[",\n\r]/.test(safe)) {
+    return `"${safe.replace(/"/g, '""')}"`;
+  }
+  return safe;
 }
 
 function toSafeUser(row: AccountRow): SafeUser {
@@ -149,6 +161,71 @@ export class GreenCartService {
          ORDER BY CASE WHEN username = 'walkin_customer' THEN 0 ELSE 1 END, full_name ASC`
       )
       .all() as unknown as SafeUser[];
+  }
+
+  getAccountById(accountId: number): SafeUser | null {
+    if (!Number.isInteger(accountId) || accountId <= 0) return null;
+    const row = this.db
+      .prepare(
+        'SELECT account_id, username, account_type, full_name FROM accounts WHERE account_id = ?'
+      )
+      .get(accountId) as SafeUser | undefined;
+    return row ?? null;
+  }
+
+  updateAccountProfile(
+    actor: SafeUser,
+    input: { full_name: string; account_id?: number }
+  ): SafeUser {
+    if (input.account_id !== undefined && Number(input.account_id) !== actor.account_id) {
+      throw new AppError(403, 'Access denied: cannot modify another user’s profile.');
+    }
+
+    const fullName = input.full_name.trim();
+    if (fullName.length < 2 || fullName.length > 80) {
+      throw new AppError(400, 'Full name must be between 2 and 80 characters.');
+    }
+
+    this.db
+      .prepare('UPDATE accounts SET full_name = ? WHERE account_id = ?')
+      .run(fullName, actor.account_id);
+
+    const updated = this.getAccountById(actor.account_id);
+    if (!updated) {
+      throw new AppError(404, 'Account not found.');
+    }
+    return updated;
+  }
+
+  changePassword(
+    actor: SafeUser,
+    input: { currentPassword: string; newPassword: string; account_id?: number }
+  ): void {
+    if (input.account_id !== undefined && Number(input.account_id) !== actor.account_id) {
+      throw new AppError(403, 'Access denied: cannot change another user’s password.');
+    }
+    if (!input.currentPassword) {
+      throw new AppError(400, 'Current password is required.');
+    }
+    if (input.newPassword.length < 6 || input.newPassword.length > 128) {
+      throw new AppError(400, 'New password must be between 6 and 128 characters.');
+    }
+
+    const row = this.db
+      .prepare('SELECT account_id, password_hash FROM accounts WHERE account_id = ?')
+      .get(actor.account_id) as { account_id: number; password_hash: string } | undefined;
+
+    if (!row) {
+      throw new AppError(404, 'Account not found.');
+    }
+    if (!verifyPassword(input.currentPassword, row.password_hash)) {
+      throw new AppError(400, 'Current password is incorrect.');
+    }
+
+    const nextHash = hashPassword(input.newPassword);
+    this.db
+      .prepare('UPDATE accounts SET password_hash = ? WHERE account_id = ?')
+      .run(nextHash, actor.account_id);
   }
 
   listCatalog(
@@ -965,6 +1042,135 @@ export class GreenCartService {
          ORDER BY t.transaction_date DESC, t.transaction_id DESC`
       )
       .all(targetAccountId) as unknown as PurchaseHistoryItem[];
+  }
+
+  searchTransactions(
+    actorRole: AccountType,
+    filters: AdminTransactionFilter = {}
+  ): AdminTransactionItem[] {
+    if (actorRole !== 'admin') {
+      throw new AppError(403, 'Administrator access required to search all store transactions.');
+    }
+
+    const conditions: string[] = [];
+    const params: Array<string | number> = [];
+
+    const search = filters.search?.trim().toLowerCase() ?? '';
+    if (search) {
+      conditions.push(
+        '(CAST(t.transaction_id AS TEXT) LIKE ? OR LOWER(dr.qr_code) LIKE ? OR LOWER(a.full_name) LIKE ? OR LOWER(a.username) LIKE ?)'
+      );
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    if (filters.customerAccountId !== undefined) {
+      const custId = Number(filters.customerAccountId);
+      if (!Number.isInteger(custId) || custId <= 0) {
+        throw new AppError(400, 'Invalid customer account filter.');
+      }
+      conditions.push('t.account_id = ?');
+      params.push(custId);
+    }
+
+    if (filters.dateFrom) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(filters.dateFrom)) {
+        throw new AppError(400, 'Invalid dateFrom format (expected YYYY-MM-DD).');
+      }
+      conditions.push('substr(t.transaction_date, 1, 10) >= ?');
+      params.push(filters.dateFrom);
+    }
+
+    if (filters.dateTo) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(filters.dateTo)) {
+        throw new AppError(400, 'Invalid dateTo format (expected YYYY-MM-DD).');
+      }
+      conditions.push('substr(t.transaction_date, 1, 10) <= ?');
+      params.push(filters.dateTo);
+    }
+
+    const sortMap: Record<AdminTransactionSort, string> = {
+      newest: 't.transaction_date DESC, t.transaction_id DESC',
+      oldest: 't.transaction_date ASC, t.transaction_id ASC',
+      highest: 'CAST(t.total_amount AS REAL) DESC, t.transaction_id DESC',
+      lowest: 'CAST(t.total_amount AS REAL) ASC, t.transaction_id DESC',
+    };
+    const sortKey: AdminTransactionSort = filters.sort ?? 'newest';
+    const orderBy = sortMap[sortKey];
+    if (!orderBy) {
+      throw new AppError(400, 'Invalid sort parameter.');
+    }
+
+    const limit = Math.min(500, Math.max(1, Number(filters.limit) || 200));
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    params.push(limit);
+
+    return this.db
+      .prepare(
+        `SELECT
+           t.transaction_id,
+           t.account_id,
+           a.username AS customer_username,
+           a.full_name AS customer_name,
+           t.transaction_date,
+           CAST(t.total_amount AS REAL) AS total_amount,
+           dr.qr_code,
+           dr.receipt_date,
+           COUNT(td.detail_id) AS item_count,
+           COALESCE(SUM(td.quantity), 0) AS total_units,
+           CAST(ei.paper_saved AS REAL) AS paper_saved,
+           CAST(ei.carbon_reduction AS REAL) AS carbon_reduction
+         FROM transactions t
+         INNER JOIN accounts a ON a.account_id = t.account_id
+         INNER JOIN digital_receipts dr ON dr.transaction_id = t.transaction_id
+         INNER JOIN eco_impact ei ON ei.transaction_id = t.transaction_id
+         LEFT JOIN transaction_details td ON td.transaction_id = t.transaction_id
+         ${whereClause}
+         GROUP BY t.transaction_id
+         ORDER BY ${orderBy}
+         LIMIT ?`
+      )
+      .all(...params) as unknown as AdminTransactionItem[];
+  }
+
+  exportTransactionsCsv(
+    actorRole: AccountType,
+    filters: AdminTransactionFilter = {}
+  ): string {
+    const rows = this.searchTransactions(actorRole, {
+      ...filters,
+      limit: filters.limit ?? 500,
+    });
+    const header = [
+      'transaction_id',
+      'transaction_date',
+      'customer_username',
+      'customer_name',
+      'qr_code',
+      'item_count',
+      'total_units',
+      'total_amount_php',
+      'paper_saved_sheets',
+      'carbon_reduction_g',
+    ].join(',');
+
+    const lines = rows.map((row) =>
+      [
+        row.transaction_id,
+        row.transaction_date,
+        row.customer_username,
+        row.customer_name,
+        row.qr_code,
+        row.item_count,
+        row.total_units,
+        Number(row.total_amount).toFixed(2),
+        Number(row.paper_saved).toFixed(2),
+        Number(row.carbon_reduction).toFixed(2),
+      ]
+        .map(sanitizeCsvCell)
+        .join(',')
+    );
+
+    return [header, ...lines].join('\r\n');
   }
 
   getEcoImpactSummary(actor: SafeUser, requestedScope: EcoScope = 'personal'): EcoImpactSummary {

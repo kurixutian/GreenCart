@@ -177,6 +177,32 @@ export interface EcoImpactSummary {
   ledger: EcoImpactLedgerRow[];
 }
 
+export type AdminTransactionSort = 'newest' | 'oldest' | 'highest' | 'lowest';
+
+export interface AdminTransactionFilter {
+  search?: string;
+  customerAccountId?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  sort?: AdminTransactionSort;
+  limit?: number;
+}
+
+export interface AdminTransactionItem {
+  transaction_id: number;
+  account_id: number;
+  customer_username: string;
+  customer_name: string;
+  transaction_date: string;
+  total_amount: number;
+  qr_code: string;
+  receipt_date: string;
+  item_count: number;
+  total_units: number;
+  paper_saved: number;
+  carbon_reduction: number;
+}
+
 export interface DatabaseSnapshot {
   accounts: SafeUser[];
   products: ProductRow[];

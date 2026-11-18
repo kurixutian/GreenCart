@@ -543,4 +543,144 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     const historicalReceipt = service.getReceiptByToken(receipt.qr_code, maria);
     expect(historicalReceipt.items[0].product_name).toBe('Seasonal Bamboo Straws');
   });
+
+  it('supports Phase 4 searchable admin transactions, CSV export escaping, and role guards', async () => {
+    const admin = service.login('admin_qcu', 'admin123');
+    const maria = service.login('maria_santos', 'customer123');
+    const middleware = createApiMiddleware(db, 'test-secret');
+
+    // Filter by customer and sort ascending/highest
+    const mariaTxs = service.searchTransactions(admin.account_type, {
+      customerAccountId: maria.account_id,
+      sort: 'highest',
+    });
+    expect(mariaTxs.length).toBeGreaterThanOrEqual(2);
+    expect(mariaTxs[0].total_amount).toBeGreaterThanOrEqual(mariaTxs[1].total_amount);
+
+    // Search by seeded transaction ID or QR prefix
+    const byId = service.searchTransactions(admin.account_type, { search: '1001' });
+    expect(byId.length).toBe(1);
+    expect(byId[0].transaction_id).toBe(1001);
+
+    // Date filter validation rejects malformed dates
+    expect(() =>
+      service.searchTransactions(admin.account_type, { dateFrom: '2026/11/01' })
+    ).toThrowError(/Invalid dateFrom/);
+
+    // Customer cannot query all store transactions or CSV export via HTTP (403)
+    const custLogin = await invokeMiddleware(middleware, {
+      method: 'POST',
+      url: '/api/auth/login',
+      body: { username: 'maria_santos', password: 'customer123' },
+    });
+    const custCookie = (custLogin.headers['set-cookie'] as string[])
+      .find((c) => c.startsWith('gc_session='))!
+      .split(';')[0];
+
+    const forbiddenTx = await invokeMiddleware(middleware, {
+      method: 'GET',
+      url: '/api/transactions',
+      headers: { cookie: custCookie },
+    });
+    expect(forbiddenTx.statusCode).toBe(403);
+
+    const forbiddenCsv = await invokeMiddleware(middleware, {
+      method: 'GET',
+      url: '/api/transactions/export.csv',
+      headers: { cookie: custCookie },
+    });
+    expect(forbiddenCsv.statusCode).toBe(403);
+
+    // Register a formula-prefixed customer name to verify CSV formula neutralization
+    const riskyCustomer = service.registerCustomer({
+      username: 'formula_user',
+      password: 'password123',
+      full_name: '=CMD|calc',
+    });
+    service.processSale(riskyCustomer, {
+      checkoutToken: 'csv-escape-check-1',
+      lineItems: [{ product_id: 1, quantity: 1 }],
+    });
+
+    const csv = service.exportTransactionsCsv(admin.account_type, {
+      customerAccountId: riskyCustomer.account_id,
+    });
+    expect(csv).toContain("'=CMD|calc");
+    expect(csv.split('\r\n')[0]).toContain('transaction_id,transaction_date');
+  });
+
+  it('supports Phase 4 customer profile and password controls with strict ownership and CSRF checks', async () => {
+    const middleware = createApiMiddleware(db, 'test-secret');
+
+    const loginRes = await invokeMiddleware(middleware, {
+      method: 'POST',
+      url: '/api/auth/login',
+      body: { username: 'maria_santos', password: 'customer123' },
+    });
+    const sessionCookie = (loginRes.headers['set-cookie'] as string[])
+      .find((c) => c.startsWith('gc_session='))!
+      .split(';')[0];
+    const csrfToken = String(loginRes.body.csrfToken);
+
+    // Reject missing CSRF on profile update
+    const noCsrf = await invokeMiddleware(middleware, {
+      method: 'PATCH',
+      url: '/api/account/profile',
+      headers: { cookie: sessionCookie },
+      body: { full_name: 'Maria S. Updated' },
+    });
+    expect(noCsrf.statusCode).toBe(403);
+
+    // Reject cross-account tampering even with valid CSRF
+    const crossAccount = await invokeMiddleware(middleware, {
+      method: 'PATCH',
+      url: '/api/account/profile',
+      headers: { cookie: sessionCookie, 'x-csrf-token': csrfToken },
+      body: { account_id: 2, full_name: 'Tampered Name' },
+    });
+    expect(crossAccount.statusCode).toBe(403);
+
+    // Valid self profile update updates DB & refreshes session cookie
+    const updateOk = await invokeMiddleware(middleware, {
+      method: 'PATCH',
+      url: '/api/account/profile',
+      headers: { cookie: sessionCookie, 'x-csrf-token': csrfToken },
+      body: { full_name: 'Maria Santos-Reyes' },
+    });
+    expect(updateOk.statusCode).toBe(200);
+    expect((updateOk.body.user as { full_name: string }).full_name).toBe('Maria Santos-Reyes');
+
+    const nextCookie = (updateOk.headers['set-cookie'] as string[])
+      .find((c) => c.startsWith('gc_session='))!
+      .split(';')[0];
+    const nextCsrf = String(updateOk.body.csrfToken);
+
+    const meRes = await invokeMiddleware(middleware, {
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: { cookie: nextCookie },
+    });
+    expect((meRes.body.user as { full_name: string }).full_name).toBe('Maria Santos-Reyes');
+
+    // Wrong current password rejected
+    const badCurrent = await invokeMiddleware(middleware, {
+      method: 'POST',
+      url: '/api/account/password',
+      headers: { cookie: nextCookie, 'x-csrf-token': nextCsrf },
+      body: { currentPassword: 'wrongpassword', newPassword: 'newpassword99' },
+    });
+    expect(badCurrent.statusCode).toBe(400);
+
+    // Valid password rotation works and old password fails
+    const passOk = await invokeMiddleware(middleware, {
+      method: 'POST',
+      url: '/api/account/password',
+      headers: { cookie: nextCookie, 'x-csrf-token': nextCsrf },
+      body: { currentPassword: 'customer123', newPassword: 'newpassword99' },
+    });
+    expect(passOk.statusCode).toBe(200);
+
+    expect(() => service.login('maria_santos', 'customer123')).toThrowError(/Invalid username/);
+    expect(service.login('maria_santos', 'newpassword99').full_name).toBe('Maria Santos-Reyes');
+  });
 });

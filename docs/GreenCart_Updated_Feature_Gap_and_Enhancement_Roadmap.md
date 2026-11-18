@@ -507,16 +507,15 @@ Deliverable: more accountable inventory management.
 Goal: help users retrieve records and maintain accounts.
 
 Tasks:
-- Evaluate whether current admin overview, receipt view and Eco-Impact ledger are enough.
-- If needed, add searchable transaction history with date/customer/token filters.
-- Add CSV export only if the group requires it.
-- Consider customer profile/password update functions.
-- Apply ownership checks and minimize personal data.
-- Test unauthorized and invalid requests.
+- [x] Evaluated AdminOverview, ReceiptView, and Eco-Impact ledger: upgraded `AdminOverviewView` into a unified **Store Transactions & Receipt Lookup** explorer (`GET /api/transactions`) rather than duplicating a new navigation page.
+- [x] Added searchable, customer-filterable, date-range-filterable, and sortable admin transaction history backed by `service.searchTransactions`.
+- [x] Added permission-protected (`admin` only), RFC-4180 & formula-injection-escaped CSV export (`GET /api/transactions/export.csv`).
+- [x] Added customer account controls (`AccountModal`, `PATCH /api/account/profile`, `POST /api/account/password`) supporting display name updates, current-password-verified rotation, and sign-out with minimal identity fields (`account_id`, `username`, `account_type`, `full_name`).
+- [x] Enforced strict session ownership (`actor.account_id`), CSRF verification, and admin role guards with automated Vitest + Playwright/Axe tests (`tests/greencart.test.ts`, `tests/e2e.spec.ts`).
 
-Deliverable: better record retrieval and basic account controls, where approved.
+Deliverable: better record retrieval and basic account controls, without duplicate pages or unnecessary personal data.
 
-**Gate:** no new page duplicates existing behavior and all sensitive data remains protected.
+**Gate:** no new page duplicates existing behavior and all sensitive data remains protected. *(Verified: `vitest` + Playwright/Axe).*
 
 ### Phase 5 — Eco-Impact specification decision
 

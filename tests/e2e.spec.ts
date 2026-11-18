@@ -110,6 +110,19 @@ test.describe('GreenCart Browser E2E, Mobile P0 & Accessibility', () => {
       .withTags(['wcag2a', 'wcag2aa'])
       .analyze();
     expect(ecoAxe.violations).toEqual([]);
+
+    // Phase 4: Customer Account Settings modal (minimal fields, password/profile UI + Axe check)
+    await page.getByRole('button', { name: /Account settings/i }).click();
+    await expect(page.getByRole('heading', { name: 'Account Settings' })).toBeVisible();
+    await expect(page.getByText('@maria_santos')).toBeVisible();
+    await expect(page.locator('#account-fullname-input')).toBeVisible();
+    await expect(page.locator('#account-current-password')).toBeVisible();
+
+    const accountAxe = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(accountAxe.violations).toEqual([]);
+    await page.getByRole('button', { name: /Close account settings/i }).click();
   });
 
   test('Admin P0/P1 flow: dashboard, POS F2/Enter shortcut sale, low-stock priority, inline edit & Axe', async ({
@@ -149,9 +162,17 @@ test.describe('GreenCart Browser E2E, Mobile P0 & Accessibility', () => {
       await page.getByRole('button', { name: /Close POS Register/i }).click();
     }
 
-    // Dashboard overview + Axe check
+    // Dashboard overview + Phase 4 Transaction Discovery + Axe check
     await page.locator('nav:visible').getByRole('button', { name: /Dashboard|Home/i }).click();
     await expect(page.getByRole('heading', { name: 'Store Operations Overview' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /Store Transactions & Receipt Lookup/i })
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: /Export CSV/i })).toBeVisible();
+
+    await page.locator('#admin-tx-search').fill('1001');
+    await expect(page.getByText('#1001')).toBeVisible();
+    await page.getByRole('button', { name: /Clear transaction search/i }).click();
 
     const overviewAxe = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa'])

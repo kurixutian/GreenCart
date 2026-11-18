@@ -1,10 +1,19 @@
-import { AlertTriangle, Boxes, Leaf, QrCode, Store } from './Icons';
+import { useEffect, useState } from 'react';
+import { AlertTriangle, Boxes, Leaf, QrCode, ScrollText, Search, Store, X } from './Icons';
+import { api } from '../api';
 import { formatCurrency, getStockBadgeClasses } from '../utils/format';
-import type { CatalogItem, EcoImpactSummary } from '../../shared/types';
+import type {
+  AdminTransactionItem,
+  AdminTransactionSort,
+  CatalogItem,
+  EcoImpactSummary,
+  SafeUser,
+} from '../../shared/types';
 import type { AdminSection } from './AdminShell';
 
 interface AdminOverviewViewProps {
   catalog: CatalogItem[];
+  customers: SafeUser[];
   ecoSummary: EcoImpactSummary | null;
   onNavigate: (section: AdminSection) => void;
   onInspectToken: (qrCode: string) => void;
@@ -12,14 +21,63 @@ interface AdminOverviewViewProps {
 
 export function AdminOverviewView({
   catalog,
+  customers,
   ecoSummary,
   onNavigate,
   onInspectToken,
 }: AdminOverviewViewProps) {
+  const [txSearch, setTxSearch] = useState('');
+  const [txCustomerId, setTxCustomerId] = useState<string>('ALL');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [txSort, setTxSort] = useState<AdminTransactionSort>('newest');
+  const [transactions, setTransactions] = useState<AdminTransactionItem[]>([]);
+  const [loadingTx, setLoadingTx] = useState(true);
+  const [txError, setTxError] = useState<string | null>(null);
+
+  const txFilters = {
+    search: txSearch.trim() || undefined,
+    customerAccountId: txCustomerId === 'ALL' ? undefined : Number(txCustomerId),
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
+    sort: txSort,
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingTx(true);
+    setTxError(null);
+    api
+      .getAdminTransactions({
+        search: txSearch.trim() || undefined,
+        customerAccountId: txCustomerId === 'ALL' ? undefined : Number(txCustomerId),
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+        sort: txSort,
+      })
+      .then((rows) => {
+        if (!cancelled) setTransactions(rows);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setTxError(err instanceof Error ? err.message : 'Failed to load transactions.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingTx(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [txSearch, txCustomerId, dateFrom, dateTo, txSort, ecoSummary?.paperless_count]);
+
+  const hasFilters = Boolean(
+    txSearch.trim() || txCustomerId !== 'ALL' || dateFrom || dateTo || txSort !== 'newest'
+  );
+
   const lowOrOutItems = catalog.filter(
     (i) => !i.is_archived && i.stock_status !== 'In Stock'
   );
-  const recentLedger = ecoSummary?.ledger.slice(0, 5) ?? [];
   const totalSalesAmount =
     ecoSummary?.ledger.reduce((sum, row) => sum + Number(row.total_amount), 0) ?? 0;
 
@@ -107,8 +165,8 @@ export function AdminOverviewView({
           </div>
           <div className="mt-3 space-y-2.5">
             {lowOrOutItems.length === 0 ? (
-              <p className="py-6 text-center text-xs text-slate-500">
-                All SKUs are healthy (&gt;10 units in stock).
+              <p className="py-6 text-center text-xs text-slate-600">
+                All active SKUs are above their reorder threshold.
               </p>
             ) : (
               lowOrOutItems.map((item) => (
@@ -120,8 +178,8 @@ export function AdminOverviewView({
                     <p className="truncate text-xs font-bold text-slate-900">
                       {item.product_name}
                     </p>
-                    <p className="font-mono text-[11px] text-slate-500">
-                      Qty remaining: {item.quantity}
+                    <p className="font-mono text-[11px] text-slate-600">
+                      Qty: {item.quantity} (Reorder &le; {item.reorder_level})
                     </p>
                   </div>
                   <span
@@ -137,42 +195,178 @@ export function AdminOverviewView({
           </div>
         </section>
 
-        {/* Recent Transactions */}
+        {/* Searchable Admin Transactions & Receipt Discovery (Phase 4) */}
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs lg:col-span-7">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h2 className="text-sm font-bold text-slate-900">Recent Paperless Transactions</h2>
-            <button
-              type="button"
-              onClick={() => onNavigate('receipt')}
-              className="text-xs font-semibold text-brand-700 hover:underline"
-            >
-              Lookup QR Token
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">
+                Store Transactions &amp; Receipt Lookup
+              </h2>
+              <p className="text-[11px] text-slate-600">
+                {loadingTx
+                  ? 'Searching persisted transactions...'
+                  : `${transactions.length} matching transaction${transactions.length === 1 ? '' : 's'}`}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <a
+                href={api.getTransactionsExportUrl(txFilters)}
+                download="greencart-transactions.csv"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+              >
+                <ScrollText className="h-3.5 w-3.5 text-slate-600" />
+                Export CSV
+              </a>
+              <button
+                type="button"
+                onClick={() => onNavigate('receipt')}
+                className="min-h-9 rounded-lg px-2 text-xs font-semibold text-brand-700 hover:underline"
+              >
+                Lookup QR Token
+              </button>
+            </div>
           </div>
-          <div className="mt-3 divide-y divide-slate-100">
-            {recentLedger.length === 0 ? (
-              <p className="py-6 text-center text-xs text-slate-500">No sales recorded yet.</p>
+
+          {/* Search, Customer, Date Range & Sort Filters */}
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+              <input
+                id="admin-tx-search"
+                type="text"
+                aria-label="Search transactions by ID, QR token, or customer"
+                value={txSearch}
+                onChange={(e) => setTxSearch(e.target.value)}
+                placeholder="Search tx #, QR token, customer..."
+                className="min-h-10 w-full rounded-xl border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-8 text-xs outline-none focus:border-brand-500 focus:bg-white"
+              />
+              {txSearch && (
+                <button
+                  type="button"
+                  aria-label="Clear transaction search"
+                  onClick={() => setTxSearch('')}
+                  className="absolute right-1.5 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <select
+                id="admin-tx-customer"
+                aria-label="Filter transactions by customer"
+                value={txCustomerId}
+                onChange={(e) => setTxCustomerId(e.target.value)}
+                className="min-h-10 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-800 outline-none focus:border-brand-500 focus:bg-white"
+              >
+                <option value="ALL">All Customers</option>
+                {customers.map((c) => (
+                  <option key={c.account_id} value={String(c.account_id)}>
+                    {c.full_name} (@{c.username})
+                  </option>
+                ))}
+              </select>
+
+              <select
+                id="admin-tx-sort"
+                aria-label="Sort transactions"
+                value={txSort}
+                onChange={(e) => setTxSort(e.target.value as AdminTransactionSort)}
+                className="min-h-10 rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-800 outline-none focus:border-brand-500 focus:bg-white"
+              >
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+                <option value="highest">Highest ₱</option>
+                <option value="lowest">Lowest ₱</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1.5 text-[11px] font-medium text-slate-700">
+              <span>From</span>
+              <input
+                type="date"
+                aria-label="Transactions from date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="min-h-9 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs text-slate-800 outline-none focus:border-brand-500"
+              />
+            </label>
+            <label className="flex items-center gap-1.5 text-[11px] font-medium text-slate-700">
+              <span>To</span>
+              <input
+                type="date"
+                aria-label="Transactions to date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="min-h-9 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs text-slate-800 outline-none focus:border-brand-500"
+              />
+            </label>
+            {hasFilters && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTxSearch('');
+                  setTxCustomerId('ALL');
+                  setDateFrom('');
+                  setDateTo('');
+                  setTxSort('newest');
+                }}
+                className="ml-auto text-[11px] font-semibold text-brand-700 hover:underline"
+              >
+                Reset filters
+              </button>
+            )}
+          </div>
+
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label="Store transactions list"
+            className="mt-3 max-h-[380px] divide-y divide-slate-100 overflow-y-auto pr-1 focus:outline-2 focus:outline-brand-600"
+          >
+            {txError ? (
+              <p className="py-6 text-center text-xs text-rose-700">{txError}</p>
+            ) : transactions.length === 0 && !loadingTx ? (
+              <p className="py-6 text-center text-xs text-slate-600">
+                No transactions match the current search and filter criteria.
+              </p>
             ) : (
-              recentLedger.map((tx) => (
+              transactions.map((tx) => (
                 <div
                   key={tx.transaction_id}
                   className="flex flex-wrap items-center justify-between gap-3 py-3 text-xs"
                 >
-                  <div>
-                    <span className="font-mono font-bold text-slate-900">
-                      #{tx.transaction_id}
-                    </span>
-                    <span className="ml-2 font-medium text-slate-700">{tx.customer_name}</span>
-                    <span className="block text-[11px] text-slate-500">{tx.transaction_date}</span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-mono font-bold text-slate-900">
+                        #{tx.transaction_id}
+                      </span>
+                      <span className="font-semibold text-slate-800">{tx.customer_name}</span>
+                      <span className="font-mono text-[11px] text-slate-600">
+                        @{tx.customer_username}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                      <span>{tx.transaction_date}</span>
+                      <span>&middot;</span>
+                      <span className="font-mono">{tx.qr_code}</span>
+                      <span>&middot;</span>
+                      <span>
+                        {tx.total_units} unit{tx.total_units === 1 ? '' : 's'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2.5">
                     <span className="font-mono font-bold text-slate-900 tabular-nums">
                       {formatCurrency(tx.total_amount)}
                     </span>
                     <button
                       type="button"
                       onClick={() => onInspectToken(tx.qr_code)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-[11px] font-semibold text-slate-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800"
+                      className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-[11px] font-semibold text-slate-800 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800"
                     >
                       <QrCode className="h-3 w-3" />
                       Receipt

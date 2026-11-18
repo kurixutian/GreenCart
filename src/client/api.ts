@@ -1,4 +1,6 @@
 import type {
+  AdminTransactionFilter,
+  AdminTransactionItem,
   CatalogItem,
   DatabaseSnapshot,
   DigitalReceiptView,
@@ -37,6 +39,17 @@ async function requestJson<T>(path: string, options: RequestInit = {}): Promise<
     throw new Error(data.error || `Request failed (${res.status})`);
   }
   return data;
+}
+
+function buildTransactionParams(filters: AdminTransactionFilter = {}): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.search?.trim()) params.set('search', filters.search.trim());
+  if (filters.customerAccountId) params.set('customerAccountId', String(filters.customerAccountId));
+  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
+  if (filters.dateTo) params.set('dateTo', filters.dateTo);
+  if (filters.sort) params.set('sort', filters.sort);
+  if (filters.limit) params.set('limit', String(filters.limit));
+  return params;
 }
 
 export const api = {
@@ -82,6 +95,25 @@ export const api = {
   async logout(): Promise<void> {
     await requestJson<{ ok: boolean }>('/api/auth/logout', { method: 'POST' });
     setCsrfToken(null);
+  },
+
+  async updateProfile(full_name: string): Promise<{ user: SafeUser; csrfToken: string }> {
+    const res = await requestJson<{ user: SafeUser; csrfToken: string }>(
+      '/api/account/profile',
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ full_name }),
+      }
+    );
+    setCsrfToken(res.csrfToken);
+    return res;
+  },
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await requestJson<{ ok: boolean }>('/api/account/password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
   },
 
   async getCatalog(
@@ -229,6 +261,23 @@ export const api = {
   async getHistory(): Promise<PurchaseHistoryItem[]> {
     const res = await requestJson<{ history: PurchaseHistoryItem[] }>('/api/history');
     return res.history;
+  },
+
+  async getAdminTransactions(
+    filters: AdminTransactionFilter = {}
+  ): Promise<AdminTransactionItem[]> {
+    const params = buildTransactionParams(filters);
+    const qs = params.toString();
+    const res = await requestJson<{ transactions: AdminTransactionItem[] }>(
+      `/api/transactions${qs ? `?${qs}` : ''}`
+    );
+    return res.transactions;
+  },
+
+  getTransactionsExportUrl(filters: AdminTransactionFilter = {}): string {
+    const params = buildTransactionParams(filters);
+    const qs = params.toString();
+    return `/api/transactions/export.csv${qs ? `?${qs}` : ''}`;
   },
 
   async getEcoImpact(scope: EcoScope): Promise<EcoImpactSummary> {

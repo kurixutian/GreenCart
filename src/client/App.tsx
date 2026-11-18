@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
+import { AccountModal } from './components/AccountModal';
 import { AdminOverviewView } from './components/AdminOverviewView';
 import { AdminShell, type AdminSection } from './components/AdminShell';
 import { AuthView } from './components/AuthView';
@@ -66,6 +67,7 @@ export function App() {
   const [ecoScope, setEcoScope] = useState<EcoScope>('personal');
   const [ecoSummary, setEcoSummary] = useState<EcoImpactSummary | null>(null);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [dbModalOpen, setDbModalOpen] = useState(false);
   const [idleWarningOpen, setIdleWarningOpen] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -158,6 +160,7 @@ export function App() {
         setCatalog([]);
         setHistory([]);
         setEcoSummary(null);
+        setAccountModalOpen(false);
         setDbModalOpen(false);
         setIdleWarningOpen(false);
         syncReceiptUrl(null);
@@ -315,6 +318,7 @@ export function App() {
             setMobileCartOpen(true);
             syncReceiptUrl(null);
           }}
+          onOpenAccount={() => setAccountModalOpen(true)}
           onLogout={() => void handleLogout()}
         >
           {customerSection === 'catalog' && (
@@ -365,6 +369,18 @@ export function App() {
               onInspectToken={(tok) => void handleInspectToken(tok)}
             />
           )}
+
+          <AccountModal
+            open={accountModalOpen}
+            user={user}
+            onClose={() => setAccountModalOpen(false)}
+            onUserUpdated={(updatedUser) => {
+              setUser(updatedUser);
+              void loadRoleData(updatedUser, ecoScope);
+            }}
+            onLogout={() => void handleLogout('Signed out.')}
+            onNotify={notify}
+          />
         </CustomerShell>
       ) : (
         <AdminShell
@@ -380,6 +396,7 @@ export function App() {
           {adminSection === 'overview' && (
             <AdminOverviewView
               catalog={catalog}
+              customers={customers}
               ecoSummary={ecoSummary}
               onNavigate={setAdminSection}
               onInspectToken={(tok) => void handleInspectToken(tok)}

@@ -5,7 +5,13 @@ import type { Connect, Plugin } from 'vite';
 import { signSessionToken, verifySessionToken } from './crypto.ts';
 import { openDatabase, resetDatabase } from './db.ts';
 import { AppError, GreenCartService } from './service.ts';
-import type { EcoScope, SafeUser, SaleRequestPayload } from '../shared/types.ts';
+import type {
+  AdminTransactionFilter,
+  AdminTransactionSort,
+  EcoScope,
+  SafeUser,
+  SaleRequestPayload,
+} from '../shared/types.ts';
 
 const SESSION_COOKIE = 'gc_session';
 const CSRF_COOKIE = 'gc_csrf';
@@ -125,16 +131,53 @@ export function createApiMiddleware(
     try {
       // GET /api/auth/me (refreshes rolling 30-minute session when authenticated)
       if (method === 'GET' && pathname === '/api/auth/me') {
-        if (sessionUser) {
-          const refreshedToken = signSessionToken(sessionUser, secret);
+        const currentAccount = sessionUser ? service.getAccountById(sessionUser.account_id) : null;
+        if (currentAccount) {
+          const refreshedToken = signSessionToken(currentAccount, secret);
           const refreshedCsrf = createCsrfToken(refreshedToken, secret);
-          sendJson(res, 200, { user: sessionUser, csrfToken: refreshedCsrf }, [
+          sendJson(res, 200, { user: currentAccount, csrfToken: refreshedCsrf }, [
             `${SESSION_COOKIE}=${encodeURIComponent(refreshedToken)}; HttpOnly; Path=/; SameSite=Lax${COOKIE_SECURITY}`,
             `${CSRF_COOKIE}=${encodeURIComponent(refreshedCsrf)}; Path=/; SameSite=Lax${COOKIE_SECURITY}`,
           ]);
           return;
         }
         sendJson(res, 200, { user: null, csrfToken: null });
+        return;
+      }
+
+      // PATCH /api/account/profile (self-service display name update)
+      if (method === 'PATCH' && pathname === '/api/account/profile') {
+        const actor = requireAuth();
+        requireCsrf();
+        const body = await readJsonBody<{ full_name?: string; account_id?: number }>(req);
+        const updatedUser = service.updateAccountProfile(actor, {
+          full_name: body.full_name || '',
+          account_id: body.account_id,
+        });
+        const refreshedToken = signSessionToken(updatedUser, secret);
+        const refreshedCsrf = createCsrfToken(refreshedToken, secret);
+        sendJson(res, 200, { user: updatedUser, csrfToken: refreshedCsrf }, [
+          `${SESSION_COOKIE}=${encodeURIComponent(refreshedToken)}; HttpOnly; Path=/; SameSite=Lax${COOKIE_SECURITY}`,
+          `${CSRF_COOKIE}=${encodeURIComponent(refreshedCsrf)}; Path=/; SameSite=Lax${COOKIE_SECURITY}`,
+        ]);
+        return;
+      }
+
+      // POST /api/account/password (self-service password rotation)
+      if (method === 'POST' && pathname === '/api/account/password') {
+        const actor = requireAuth();
+        requireCsrf();
+        const body = await readJsonBody<{
+          currentPassword?: string;
+          newPassword?: string;
+          account_id?: number;
+        }>(req);
+        service.changePassword(actor, {
+          currentPassword: body.currentPassword || '',
+          newPassword: body.newPassword || '',
+          account_id: body.account_id,
+        });
+        sendJson(res, 200, { ok: true });
         return;
       }
 
@@ -358,6 +401,46 @@ export function createApiMiddleware(
         const txId = Number(receiptTxMatch[1]);
         const receipt = service.getReceiptByTransactionId(txId, actor);
         sendJson(res, 200, { receipt });
+        return;
+      }
+
+      // GET /api/transactions (admin searchable/filterable/sortable transaction list)
+      if (method === 'GET' && pathname === '/api/transactions') {
+        const actor = requireAuth();
+        const rawCust = url.searchParams.get('customerAccountId');
+        const customerAccountId = rawCust ? Number(rawCust) : undefined;
+        const rawLimit = url.searchParams.get('limit');
+        const filters: AdminTransactionFilter = {
+          search: url.searchParams.get('search') || undefined,
+          customerAccountId,
+          dateFrom: url.searchParams.get('dateFrom') || undefined,
+          dateTo: url.searchParams.get('dateTo') || undefined,
+          sort: (url.searchParams.get('sort') as AdminTransactionSort | null) || undefined,
+          limit: rawLimit ? Number(rawLimit) : undefined,
+        };
+        const transactions = service.searchTransactions(actor.account_type, filters);
+        sendJson(res, 200, { transactions });
+        return;
+      }
+
+      // GET /api/transactions/export.csv (admin CSV export)
+      if (method === 'GET' && pathname === '/api/transactions/export.csv') {
+        const actor = requireAuth();
+        const rawCust = url.searchParams.get('customerAccountId');
+        const customerAccountId = rawCust ? Number(rawCust) : undefined;
+        const filters: AdminTransactionFilter = {
+          search: url.searchParams.get('search') || undefined,
+          customerAccountId,
+          dateFrom: url.searchParams.get('dateFrom') || undefined,
+          dateTo: url.searchParams.get('dateTo') || undefined,
+          sort: (url.searchParams.get('sort') as AdminTransactionSort | null) || undefined,
+        };
+        const csv = service.exportTransactionsCsv(actor.account_type, filters);
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="greencart-transactions.csv"');
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(csv);
         return;
       }
 
