@@ -88,6 +88,19 @@ function sendJson(
   res.end(JSON.stringify(body));
 }
 
+function parseTransactionFilters(url: URL): AdminTransactionFilter {
+  const rawCust = url.searchParams.get('customerAccountId');
+  const rawLimit = url.searchParams.get('limit');
+  return {
+    search: url.searchParams.get('search') || undefined,
+    customerAccountId: rawCust ? Number(rawCust) : undefined,
+    dateFrom: url.searchParams.get('dateFrom') || undefined,
+    dateTo: url.searchParams.get('dateTo') || undefined,
+    sort: (url.searchParams.get('sort') as AdminTransactionSort | null) || undefined,
+    limit: rawLimit ? Number(rawLimit) : undefined,
+  };
+}
+
 export function createApiMiddleware(
   db: DatabaseSync,
   secret: string = resolveSessionSecret()
@@ -407,18 +420,10 @@ export function createApiMiddleware(
       // GET /api/transactions (admin searchable/filterable/sortable transaction list)
       if (method === 'GET' && pathname === '/api/transactions') {
         const actor = requireAuth();
-        const rawCust = url.searchParams.get('customerAccountId');
-        const customerAccountId = rawCust ? Number(rawCust) : undefined;
-        const rawLimit = url.searchParams.get('limit');
-        const filters: AdminTransactionFilter = {
-          search: url.searchParams.get('search') || undefined,
-          customerAccountId,
-          dateFrom: url.searchParams.get('dateFrom') || undefined,
-          dateTo: url.searchParams.get('dateTo') || undefined,
-          sort: (url.searchParams.get('sort') as AdminTransactionSort | null) || undefined,
-          limit: rawLimit ? Number(rawLimit) : undefined,
-        };
-        const transactions = service.searchTransactions(actor.account_type, filters);
+        const transactions = service.searchTransactions(
+          actor.account_type,
+          parseTransactionFilters(url)
+        );
         sendJson(res, 200, { transactions });
         return;
       }
@@ -426,16 +431,10 @@ export function createApiMiddleware(
       // GET /api/transactions/export.csv (admin CSV export)
       if (method === 'GET' && pathname === '/api/transactions/export.csv') {
         const actor = requireAuth();
-        const rawCust = url.searchParams.get('customerAccountId');
-        const customerAccountId = rawCust ? Number(rawCust) : undefined;
-        const filters: AdminTransactionFilter = {
-          search: url.searchParams.get('search') || undefined,
-          customerAccountId,
-          dateFrom: url.searchParams.get('dateFrom') || undefined,
-          dateTo: url.searchParams.get('dateTo') || undefined,
-          sort: (url.searchParams.get('sort') as AdminTransactionSort | null) || undefined,
-        };
-        const csv = service.exportTransactionsCsv(actor.account_type, filters);
+        const csv = service.exportTransactionsCsv(
+          actor.account_type,
+          parseTransactionFilters(url)
+        );
         res.statusCode = 200;
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', 'attachment; filename="greencart-transactions.csv"');

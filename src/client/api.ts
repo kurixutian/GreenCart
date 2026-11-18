@@ -14,7 +14,7 @@ import type {
 
 let csrfTokenCache: string | null = null;
 
-export function setCsrfToken(token: string | null): void {
+function setCsrfToken(token: string | null): void {
   csrfTokenCache = token;
 }
 

@@ -7,6 +7,7 @@ const localChromePath =
 export default defineConfig({
   testDir: './tests',
   testMatch: 'e2e.spec.ts',
+  globalSetup: './tests/globalSetup.ts',
   timeout: 30_000,
   retries: 0,
   use: {

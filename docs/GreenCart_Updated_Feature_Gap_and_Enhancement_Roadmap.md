@@ -78,7 +78,7 @@ The repository contains both `GREENCART_UI_UX_AND_TECHNICAL_AUDIT.md` and `Green
 
 The audit now has a resolved-items section marking much of P0–P2 complete, but its older baseline section still describes the previous shared shell, old receipt behavior and old token/session state. The missing-features plan also retains outdated statements about Playwright not being installed, old source paths, and an outer Markdown code fence.
 
-**Documentation task:** update or supersede stale status statements. Avoid maintaining two competing roadmaps with different implementation status.
+**Documentation task:** update or supersede stale status statements. Avoid maintaining two competing roadmaps with different implementation status. *(Superseded early drafts `GreenCart_Improved_Build_Plan.md` and `GreenCart_Missing_Features_Plan.md`, along with `assets/`, were removed during repo cleanup so `GreenCart_Updated_Feature_Gap_and_Enhancement_Roadmap.md` and `GREENCART_UI_UX_AND_TECHNICAL_AUDIT.md` remain the unified planning references.)*
 
 ---
 
