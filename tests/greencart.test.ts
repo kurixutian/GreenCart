@@ -446,4 +446,101 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
       })
     ).toThrowError(/already assigned/);
   });
+
+  it('supports Phase 3 per-product reorder thresholds and adjustment audit logs', () => {
+    const admin = service.login('admin_qcu', 'admin123');
+    const maria = service.login('maria_santos', 'customer123');
+
+    const created = service.upsertProduct(admin, {
+      product_name: 'Refillable Dish Soap Pouch',
+      description: 'Concentrated botanical dishwashing refill.',
+      price: 150,
+      quantity: 5,
+      reorder_level: 3,
+      category: 'Kitchen & Home',
+      sku: 'ECO-301',
+    });
+    expect(created.reorder_level).toBe(3);
+    expect(created.stock_status).toBe('In Stock');
+
+    const adjusted = service.adjustStock(
+      admin,
+      created.product_id,
+      -3,
+      'Cycle count correction'
+    );
+    expect(adjusted.quantity).toBe(2);
+    expect(adjusted.stock_status).toBe('Low Stock');
+
+    const logs = service.listInventoryAdjustments(admin.account_type, created.product_id);
+    expect(logs.length).toBe(2);
+    expect(logs[0].delta).toBe(-3);
+    expect(logs[0].previous_qty).toBe(5);
+    expect(logs[0].new_qty).toBe(2);
+    expect(logs[0].reason).toBe('Cycle count correction');
+    expect(logs[0].actor_name).toBe('Store Administrator');
+    expect(logs[1].reason).toBe('Initial stock entry');
+
+    expect(() => service.listInventoryAdjustments(maria.account_type)).toThrowError(
+      /Only administrators/
+    );
+  });
+
+  it('archives products without breaking historical receipts and blocks new sales', async () => {
+    const admin = service.login('admin_qcu', 'admin123');
+    const maria = service.login('maria_santos', 'customer123');
+
+    const item = service.upsertProduct(admin, {
+      product_name: 'Seasonal Bamboo Straws',
+      description: 'Limited-edition portable straw set.',
+      price: 90,
+      quantity: 10,
+      reorder_level: 2,
+      category: 'Drinkware',
+      sku: 'ECO-302',
+    });
+
+    const receipt = service.processSale(maria, {
+      checkoutToken: 'archive-history-check-1',
+      lineItems: [{ product_id: item.product_id, quantity: 2 }],
+    });
+
+    const archived = service.setProductArchived(admin, item.product_id, true);
+    expect(archived.is_archived).toBe(1);
+
+    // Excluded from active catalog, retained when includeArchived=true
+    expect(service.listCatalog().some((p) => p.product_id === item.product_id)).toBe(false);
+    expect(
+      service.listCatalog('', 'ALL', 'ALL', true).some((p) => p.product_id === item.product_id)
+    ).toBe(true);
+
+    // Customers cannot includeArchived=1 via HTTP API
+    const middleware = createApiMiddleware(db, 'test-secret');
+    const loginRes = await invokeMiddleware(middleware, {
+      method: 'POST',
+      url: '/api/auth/login',
+      body: { username: 'maria_santos', password: 'customer123' },
+    });
+    const setCookies = loginRes.headers['set-cookie'] as string[];
+    const sessionCookie = setCookies.find((c) => c.startsWith('gc_session='))!.split(';')[0];
+    const catalogRes = await invokeMiddleware(middleware, {
+      method: 'GET',
+      url: '/api/catalog?includeArchived=1',
+      headers: { cookie: sessionCookie },
+    });
+    expect(catalogRes.statusCode).toBe(200);
+    const itemsList = catalogRes.body.items as Array<{ product_id: number }>;
+    expect(itemsList.some((p) => p.product_id === item.product_id)).toBe(false);
+
+    // New checkout rejects archived SKU while historical receipt remains intact
+    expect(() =>
+      service.processSale(maria, {
+        checkoutToken: 'archive-blocked-check-2',
+        lineItems: [{ product_id: item.product_id, quantity: 1 }],
+      })
+    ).toThrowError(/archived and no longer available/i);
+
+    const historicalReceipt = service.getReceiptByToken(receipt.qr_code, maria);
+    expect(historicalReceipt.items[0].product_name).toBe('Seasonal Bamboo Straws');
+  });
 });

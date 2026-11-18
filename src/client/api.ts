@@ -4,6 +4,7 @@ import type {
   DigitalReceiptView,
   EcoImpactSummary,
   EcoScope,
+  InventoryAdjustmentView,
   PurchaseHistoryItem,
   SafeUser,
   SaleLineInput,
@@ -83,11 +84,17 @@ export const api = {
     setCsrfToken(null);
   },
 
-  async getCatalog(search = '', status = 'ALL', category = 'ALL'): Promise<CatalogItem[]> {
+  async getCatalog(
+    search = '',
+    status = 'ALL',
+    category = 'ALL',
+    includeArchived = false
+  ): Promise<CatalogItem[]> {
     const params = new URLSearchParams();
     if (search.trim()) params.set('search', search.trim());
     if (status && status !== 'ALL') params.set('status', status);
     if (category && category !== 'ALL') params.set('category', category);
+    if (includeArchived) params.set('includeArchived', '1');
     const qs = params.toString();
     const res = await requestJson<{ items: CatalogItem[] }>(
       `/api/catalog${qs ? `?${qs}` : ''}`
@@ -122,6 +129,7 @@ export const api = {
     description: string;
     price: number;
     quantity: number;
+    reorder_level?: number;
     category?: string;
     image_url?: string | null;
     sku?: string | null;
@@ -140,9 +148,12 @@ export const api = {
       description: string;
       price: number;
       quantity: number;
+      reorder_level?: number;
+      is_archived?: boolean | number;
       category?: string;
       image_url?: string | null;
       sku?: string | null;
+      adjustment_reason?: string;
     }
   ): Promise<CatalogItem> {
     const res = await requestJson<{ item: CatalogItem }>(`/api/products/${productId}`, {
@@ -152,15 +163,41 @@ export const api = {
     return res.item;
   },
 
-  async adjustStock(productId: number, delta: number): Promise<CatalogItem> {
+  async setProductArchived(productId: number, isArchived: boolean): Promise<CatalogItem> {
+    const res = await requestJson<{ item: CatalogItem }>(`/api/products/${productId}/archive`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_archived: isArchived }),
+    });
+    return res.item;
+  },
+
+  async adjustStock(
+    productId: number,
+    delta: number,
+    reason = 'Quick stock adjustment'
+  ): Promise<CatalogItem> {
     const res = await requestJson<{ item: CatalogItem }>(
       `/api/inventory/${productId}/adjust`,
       {
         method: 'PATCH',
-        body: JSON.stringify({ delta }),
+        body: JSON.stringify({ delta, reason }),
       }
     );
     return res.item;
+  },
+
+  async getInventoryAdjustments(
+    productId?: number,
+    limit = 100
+  ): Promise<InventoryAdjustmentView[]> {
+    const params = new URLSearchParams();
+    if (productId) params.set('productId', String(productId));
+    if (limit) params.set('limit', String(limit));
+    const qs = params.toString();
+    const res = await requestJson<{ adjustments: InventoryAdjustmentView[] }>(
+      `/api/inventory/adjustments${qs ? `?${qs}` : ''}`
+    );
+    return res.adjustments;
   },
 
   async processSale(payload: {

@@ -37,10 +37,26 @@ function ensurePhase1ProductColumns(db: DatabaseSync): void {
     db.exec('ALTER TABLE products ADD COLUMN sku TEXT;');
     migrated = true;
   }
+  if (!colNames.has('is_archived')) {
+    db.exec('ALTER TABLE products ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0 CHECK (is_archived IN (0, 1));');
+  }
 
   db.exec('CREATE INDEX IF NOT EXISTS idx_products_name ON products(product_name);');
   db.exec('CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);');
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_products_sku ON products(sku) WHERE sku IS NOT NULL;');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_products_archived ON products(is_archived);');
+
+  const invTable = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='inventory'")
+    .get() as { name: string } | undefined;
+  if (invTable) {
+    const invCols = db
+      .prepare('PRAGMA table_info(inventory)')
+      .all() as Array<{ name: string }>;
+    if (!new Set(invCols.map((c) => c.name)).has('reorder_level')) {
+      db.exec('ALTER TABLE inventory ADD COLUMN reorder_level INTEGER NOT NULL DEFAULT 10 CHECK (reorder_level >= 1);');
+    }
+  }
 
   if (migrated) {
     const stmt = db.prepare(
@@ -92,6 +108,7 @@ export function resetDatabase(db: DatabaseSync): void {
       DELETE FROM digital_receipts;
       DELETE FROM transaction_details;
       DELETE FROM transactions;
+      DELETE FROM inventory_adjustments;
       DELETE FROM inventory;
       DELETE FROM products;
       DELETE FROM accounts;

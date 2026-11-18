@@ -49,3 +49,7 @@ INSERT INTO eco_impact (impact_id, transaction_id, paper_saved, carbon_reduction
   (801, 1001, 1.50, 5.25),
   (802, 1002, 1.50, 5.25),
   (803, 1003, 1.50, 5.25);
+
+INSERT INTO inventory_adjustments (adjustment_id, product_id, account_id, delta, previous_qty, new_qty, reason, adjusted_at) VALUES
+  (1, 7, 4, -5, 5, 0, 'Damaged / expired', '2026-11-16 09:15:00'),
+  (2, 3, 4, 8, 0, 8, 'Restock shipment', '2026-11-17 08:30:00');

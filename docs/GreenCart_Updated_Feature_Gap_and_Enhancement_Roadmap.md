@@ -492,16 +492,15 @@ Deliverable: faster, more reliable POS product lookup.
 Goal: improve stock control beyond basic quantity editing.
 
 Tasks:
-- Decide global vs per-product low-stock threshold.
-- Add configurable threshold if justified.
-- Decide whether stock adjustment history is required.
-- If approved, add a movement/adjustment entity with actor, timestamp, quantity delta and reason.
-- Consider product archive status to preserve historical transactions without offering inactive products for sale.
-- Add tests for thresholds, audit history and archived products.
+- [x] Decide global vs per-product low-stock threshold (`inventory.reorder_level` defaulting to `10`).
+- [x] Add configurable per-product `reorder_level` (`db/migrations/003_phase3_inventory_accountability.sql`, Admin Inventory modal + badge).
+- [x] Decide stock adjustment history & add `inventory_adjustments` entity with actor, timestamp, quantity delta, and reason (`GET /api/inventory/adjustments`, Adjustment Audit Log modal).
+- [x] Add product archive status (`products.is_archived`) to preserve historical transactions and receipts without offering inactive products for sale (`PATCH /api/products/:id/archive`).
+- [x] Add tests for per-product thresholds, audit history, and archived product guards (`tests/greencart.test.ts` and `tests/e2e.spec.ts`).
 
 Deliverable: more accountable inventory management.
 
-**Gate:** historical transactions remain intact and inventory records remain consistent.
+**Gate:** historical transactions remain intact and inventory records remain consistent. *(Verified: `vitest` + Playwright/Axe).*
 
 ### Phase 4 — Admin transaction discovery and customer account controls
 

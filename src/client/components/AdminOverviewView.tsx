@@ -16,7 +16,9 @@ export function AdminOverviewView({
   onNavigate,
   onInspectToken,
 }: AdminOverviewViewProps) {
-  const lowOrOutItems = catalog.filter((i) => i.stock_status !== 'In Stock');
+  const lowOrOutItems = catalog.filter(
+    (i) => !i.is_archived && i.stock_status !== 'In Stock'
+  );
   const recentLedger = ecoSummary?.ledger.slice(0, 5) ?? [];
   const totalSalesAmount =
     ecoSummary?.ledger.reduce((sum, row) => sum + Number(row.total_amount), 0) ?? 0;

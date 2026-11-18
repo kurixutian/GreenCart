@@ -100,11 +100,14 @@ Submitted to: Mr. Benjamin D. Molinar                                      Score
 
 ---
 
-## ERD v2 Amendment (Approved Phase 1 & Phase 2 Product Expansion)
+## ERD v2 Amendment (Approved Phase 1–3 Product & Inventory Accountability Expansion)
 
-Preserves the canonical seven entities (`Account`, `Product`, `Inventory`, `Transaction`, `Transaction_Detail`, `Digital_Receipt`, `Eco_Impact`) and extends `Product` via `db/migrations/001_phase1_product_images_and_categories.sql` and `db/migrations/002_phase2_product_sku.sql`:
-- `category` (`TEXT NOT NULL DEFAULT 'Kitchen & Home'`, indexed via `idx_products_category`)
-- `image_url` (`TEXT`, nullable relative asset/upload path or HTTP(S) URL with client fallback)
-- `sku` (`TEXT`, nullable unique SKU/barcode identifier indexed via `idx_products_sku`)
+Preserves the canonical seven entities (`Account`, `Product`, `Inventory`, `Transaction`, `Transaction_Detail`, `Digital_Receipt`, `Eco_Impact`) and extends `Product`, `Inventory`, and audit history via `db/migrations/001_phase1_product_images_and_categories.sql`, `db/migrations/002_phase2_product_sku.sql`, and `db/migrations/003_phase3_inventory_accountability.sql`:
+- `products.category` (`TEXT NOT NULL DEFAULT 'Kitchen & Home'`, indexed via `idx_products_category`)
+- `products.image_url` (`TEXT`, nullable relative asset/upload path or HTTP(S) URL with client fallback)
+- `products.sku` (`TEXT`, nullable unique SKU/barcode identifier indexed via `idx_products_sku`)
+- `products.is_archived` (`INTEGER NOT NULL DEFAULT 0 CHECK (is_archived IN (0, 1))`, indexed via `idx_products_archived`; hides inactive products from shopping/POS while preserving historical `transaction_details` and `digital_receipts`)
+- `inventory.reorder_level` (`INTEGER NOT NULL DEFAULT 10 CHECK (reorder_level >= 1)`, configurable per-product low-stock threshold)
+- `inventory_adjustments` audit entity (`adjustment_id`, `product_id` FK, `account_id` FK actor, `delta`, `previous_qty`, `new_qty`, `reason`, `adjusted_at`, indexed via `idx_inventory_adjustments_product_date`)
 
 

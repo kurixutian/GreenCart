@@ -35,12 +35,14 @@ export interface ProductRow {
   category: string;
   image_url: string | null;
   sku: string | null;
+  is_archived: number;
 }
 
 export interface InventoryRow {
   inventory_id: number;
   product_id: number;
   quantity: number;
+  reorder_level: number;
   stock_status: StockStatus;
 }
 
@@ -52,9 +54,25 @@ export interface CatalogItem {
   category: string;
   image_url: string | null;
   sku: string | null;
+  is_archived: number;
   inventory_id: number;
   quantity: number;
+  reorder_level: number;
   stock_status: StockStatus;
+}
+
+export interface InventoryAdjustmentView {
+  adjustment_id: number;
+  product_id: number;
+  product_name: string;
+  sku: string | null;
+  account_id: number;
+  actor_name: string;
+  delta: number;
+  previous_qty: number;
+  new_qty: number;
+  reason: string;
+  adjusted_at: string;
 }
 
 export interface TransactionRow {

@@ -19,6 +19,7 @@ import {
   type EcoImpactRow,
   type EcoImpactSummary,
   type EcoScope,
+  type InventoryAdjustmentView,
   type InventoryRow,
   type ProductRow,
   type PurchaseHistoryItem,
@@ -40,9 +41,9 @@ export class AppError extends Error {
   }
 }
 
-export function deriveStockStatus(quantity: number): StockStatus {
+export function deriveStockStatus(quantity: number, reorderLevel = 10): StockStatus {
   if (quantity <= 0) return 'Out of Stock';
-  if (quantity <= 10) return 'Low Stock';
+  if (quantity <= reorderLevel) return 'Low Stock';
   return 'In Stock';
 }
 
@@ -150,10 +151,19 @@ export class GreenCartService {
       .all() as unknown as SafeUser[];
   }
 
-  listCatalog(search = '', statusFilter = 'ALL', categoryFilter = 'ALL'): CatalogItem[] {
+  listCatalog(
+    search = '',
+    statusFilter = 'ALL',
+    categoryFilter = 'ALL',
+    includeArchived = false
+  ): CatalogItem[] {
     const query = search.trim().toLowerCase();
     const conditions: string[] = [];
     const params: string[] = [];
+
+    if (!includeArchived) {
+      conditions.push('p.is_archived = 0');
+    }
 
     if (query) {
       conditions.push(
@@ -184,8 +194,10 @@ export class GreenCartService {
            p.category,
            p.image_url,
            p.sku,
+           p.is_archived,
            i.inventory_id,
            i.quantity,
+           i.reorder_level,
            i.stock_status
          FROM products p
          INNER JOIN inventory i ON i.product_id = p.product_id
@@ -269,22 +281,60 @@ export class GreenCartService {
     return trimmed;
   }
 
+  private resolveAdminActorId(
+    actorOrRole: SafeUser | AccountType,
+    forbiddenMessage: string
+  ): number {
+    const role = typeof actorOrRole === 'string' ? actorOrRole : actorOrRole.account_type;
+    if (role !== 'admin') {
+      throw new AppError(403, forbiddenMessage);
+    }
+    if (typeof actorOrRole !== 'string') {
+      return actorOrRole.account_id;
+    }
+    const adminRow = this.db
+      .prepare("SELECT account_id FROM accounts WHERE account_type = 'admin' ORDER BY account_id ASC LIMIT 1")
+      .get() as { account_id: number } | undefined;
+    if (!adminRow) {
+      throw new AppError(403, forbiddenMessage);
+    }
+    return adminRow.account_id;
+  }
+
+  private getCatalogItemById(productId: number): CatalogItem {
+    return this.db
+      .prepare(
+        `SELECT
+           p.product_id, p.product_name, p.description, CAST(p.price AS REAL) AS price,
+           p.category, p.image_url, p.sku, p.is_archived,
+           i.inventory_id, i.quantity, i.reorder_level, i.stock_status
+         FROM products p
+         INNER JOIN inventory i ON i.product_id = p.product_id
+         WHERE p.product_id = ?`
+      )
+      .get(productId) as unknown as CatalogItem;
+  }
+
   upsertProduct(
-    actorRole: AccountType,
+    actorOrRole: SafeUser | AccountType,
     input: {
       product_id?: number;
       product_name: string;
       description: string;
       price: number;
       quantity: number;
+      reorder_level?: number;
+      is_archived?: boolean | number;
       category?: string;
       image_url?: string | null;
       sku?: string | null;
+      adjustment_reason?: string;
     }
   ): CatalogItem {
-    if (actorRole !== 'admin') {
-      throw new AppError(403, 'Only administrators can add or edit products.');
-    }
+    const actorId = this.resolveAdminActorId(
+      actorOrRole,
+      'Only administrators can add or edit products.'
+    );
 
     const productName = input.product_name.trim();
     const description = input.description.trim();
@@ -293,6 +343,8 @@ export class GreenCartService {
     const normalizedSku = input.sku === undefined ? undefined : this.normalizeSku(input.sku);
     const price = Number(input.price);
     const quantity = Number(input.quantity);
+    const reorderLevelInput =
+      input.reorder_level === undefined ? undefined : Number(input.reorder_level);
 
     if (productName.length < 2 || productName.length > 120) {
       throw new AppError(400, 'Product name must be between 2 and 120 characters.');
@@ -309,9 +361,15 @@ export class GreenCartService {
     if (!Number.isInteger(quantity) || quantity < 0) {
       throw new AppError(400, 'Quantity must be a non-negative whole integer.');
     }
+    if (
+      reorderLevelInput !== undefined &&
+      (!Number.isInteger(reorderLevelInput) || reorderLevelInput < 1 || reorderLevelInput > 10000)
+    ) {
+      throw new AppError(400, 'Reorder level must be a whole integer between 1 and 10000.');
+    }
 
     const normalizedPrice = Number(price.toFixed(2));
-    const stockStatus = deriveStockStatus(quantity);
+    const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     this.db.exec('BEGIN IMMEDIATE');
     try {
@@ -328,9 +386,21 @@ export class GreenCartService {
 
       if (targetProductId !== undefined) {
         const existing = this.db
-          .prepare('SELECT product_id, image_url, sku FROM products WHERE product_id = ?')
+          .prepare(
+            `SELECT p.product_id, p.image_url, p.sku, p.is_archived, i.quantity, i.reorder_level
+             FROM products p
+             INNER JOIN inventory i ON i.product_id = p.product_id
+             WHERE p.product_id = ?`
+          )
           .get(targetProductId) as
-          | { product_id: number; image_url: string | null; sku: string | null }
+          | {
+              product_id: number;
+              image_url: string | null;
+              sku: string | null;
+              is_archived: number;
+              quantity: number;
+              reorder_level: number;
+            }
           | undefined;
         if (!existing) {
           throw new AppError(404, 'Product not found.');
@@ -340,10 +410,18 @@ export class GreenCartService {
           input.image_url === undefined ? existing.image_url : imageUrl;
         const effectiveSku =
           normalizedSku === undefined ? existing.sku : normalizedSku;
+        const effectiveReorderLevel = reorderLevelInput ?? existing.reorder_level;
+        const effectiveArchived =
+          input.is_archived === undefined
+            ? existing.is_archived
+            : input.is_archived
+              ? 1
+              : 0;
+        const stockStatus = deriveStockStatus(quantity, effectiveReorderLevel);
 
         this.db
           .prepare(
-            'UPDATE products SET product_name = ?, description = ?, price = ?, category = ?, image_url = ?, sku = ? WHERE product_id = ?'
+            'UPDATE products SET product_name = ?, description = ?, price = ?, category = ?, image_url = ?, sku = ?, is_archived = ? WHERE product_id = ?'
           )
           .run(
             productName,
@@ -352,16 +430,40 @@ export class GreenCartService {
             category,
             effectiveImage,
             effectiveSku,
+            effectiveArchived,
             targetProductId
           );
 
         this.db
-          .prepare('UPDATE inventory SET quantity = ?, stock_status = ? WHERE product_id = ?')
-          .run(quantity, stockStatus, targetProductId);
+          .prepare('UPDATE inventory SET quantity = ?, reorder_level = ?, stock_status = ? WHERE product_id = ?')
+          .run(quantity, effectiveReorderLevel, stockStatus, targetProductId);
+
+        if (quantity !== existing.quantity) {
+          const reason = (input.adjustment_reason || 'Inventory count update').trim().slice(0, 120);
+          this.db
+            .prepare(
+              `INSERT INTO inventory_adjustments
+                 (product_id, account_id, delta, previous_qty, new_qty, reason, adjusted_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`
+            )
+            .run(
+              targetProductId,
+              actorId,
+              quantity - existing.quantity,
+              existing.quantity,
+              quantity,
+              reason || 'Inventory count update',
+              timestamp
+            );
+        }
       } else {
+        const effectiveReorderLevel = reorderLevelInput ?? 10;
+        const effectiveArchived = input.is_archived ? 1 : 0;
+        const stockStatus = deriveStockStatus(quantity, effectiveReorderLevel);
+
         const insertProd = this.db
           .prepare(
-            'INSERT INTO products (product_name, description, price, category, image_url, sku) VALUES (?, ?, ?, ?, ?, ?)'
+            'INSERT INTO products (product_name, description, price, category, image_url, sku, is_archived) VALUES (?, ?, ?, ?, ?, ?, ?)'
           )
           .run(
             productName,
@@ -369,54 +471,73 @@ export class GreenCartService {
             normalizedPrice,
             category,
             imageUrl,
-            normalizedSku ?? null
+            normalizedSku ?? null,
+            effectiveArchived
           );
         targetProductId = Number(insertProd.lastInsertRowid);
 
         this.db
           .prepare(
-            'INSERT INTO inventory (product_id, quantity, stock_status) VALUES (?, ?, ?)'
+            'INSERT INTO inventory (product_id, quantity, reorder_level, stock_status) VALUES (?, ?, ?, ?)'
           )
-          .run(targetProductId, quantity, stockStatus);
+          .run(targetProductId, quantity, effectiveReorderLevel, stockStatus);
+
+        if (quantity > 0) {
+          this.db
+            .prepare(
+              `INSERT INTO inventory_adjustments
+                 (product_id, account_id, delta, previous_qty, new_qty, reason, adjusted_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`
+            )
+            .run(
+              targetProductId,
+              actorId,
+              quantity,
+              0,
+              quantity,
+              'Initial stock entry',
+              timestamp
+            );
+        }
       }
 
       this.db.exec('COMMIT');
 
-      const saved = this.db
-        .prepare(
-          `SELECT
-             p.product_id, p.product_name, p.description, CAST(p.price AS REAL) AS price,
-             p.category, p.image_url, p.sku,
-             i.inventory_id, i.quantity, i.stock_status
-           FROM products p
-           INNER JOIN inventory i ON i.product_id = p.product_id
-           WHERE p.product_id = ?`
-        )
-        .get(targetProductId) as unknown as CatalogItem;
-
-      return saved;
+      return this.getCatalogItemById(targetProductId);
     } catch (err) {
       this.db.exec('ROLLBACK');
       throw err;
     }
   }
 
-  adjustStock(actorRole: AccountType, productId: number, delta: number): CatalogItem {
-    if (actorRole !== 'admin') {
-      throw new AppError(403, 'Only administrators can adjust inventory.');
-    }
+  adjustStock(
+    actorOrRole: SafeUser | AccountType,
+    productId: number,
+    delta: number,
+    reason = 'Quick stock adjustment'
+  ): CatalogItem {
+    const actorId = this.resolveAdminActorId(
+      actorOrRole,
+      'Only administrators can adjust inventory.'
+    );
     if (!Number.isInteger(productId) || productId <= 0) {
       throw new AppError(400, 'Invalid product ID.');
     }
     if (!Number.isInteger(delta) || delta === 0) {
       throw new AppError(400, 'Stock adjustment delta must be a non-zero integer.');
     }
+    const cleanReason = reason.trim();
+    if (!cleanReason || cleanReason.length > 120) {
+      throw new AppError(400, 'Adjustment reason must be between 1 and 120 characters.');
+    }
+
+    const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     this.db.exec('BEGIN IMMEDIATE');
     try {
       const current = this.db
-        .prepare('SELECT quantity FROM inventory WHERE product_id = ?')
-        .get(productId) as { quantity: number } | undefined;
+        .prepare('SELECT quantity, reorder_level FROM inventory WHERE product_id = ?')
+        .get(productId) as { quantity: number; reorder_level: number } | undefined;
 
       if (!current) {
         throw new AppError(404, 'Product inventory record not found.');
@@ -427,28 +548,93 @@ export class GreenCartService {
         throw new AppError(400, 'Stock quantity cannot become negative.');
       }
 
-      const nextStatus = deriveStockStatus(nextQuantity);
+      const nextStatus = deriveStockStatus(nextQuantity, current.reorder_level);
       this.db
         .prepare('UPDATE inventory SET quantity = ?, stock_status = ? WHERE product_id = ?')
         .run(nextQuantity, nextStatus, productId);
 
+      this.db
+        .prepare(
+          `INSERT INTO inventory_adjustments
+             (product_id, account_id, delta, previous_qty, new_qty, reason, adjusted_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(productId, actorId, delta, current.quantity, nextQuantity, cleanReason, timestamp);
+
       this.db.exec('COMMIT');
 
-      return this.db
-        .prepare(
-          `SELECT
-             p.product_id, p.product_name, p.description, CAST(p.price AS REAL) AS price,
-             p.category, p.image_url, p.sku,
-             i.inventory_id, i.quantity, i.stock_status
-           FROM products p
-           INNER JOIN inventory i ON i.product_id = p.product_id
-           WHERE p.product_id = ?`
-        )
-        .get(productId) as unknown as CatalogItem;
+      return this.getCatalogItemById(productId);
     } catch (err) {
       this.db.exec('ROLLBACK');
       throw err;
     }
+  }
+
+  setProductArchived(
+    actorOrRole: SafeUser | AccountType,
+    productId: number,
+    isArchived: boolean
+  ): CatalogItem {
+    this.resolveAdminActorId(
+      actorOrRole,
+      'Only administrators can archive or restore products.'
+    );
+    if (!Number.isInteger(productId) || productId <= 0) {
+      throw new AppError(400, 'Invalid product ID.');
+    }
+
+    const existing = this.db
+      .prepare('SELECT product_id FROM products WHERE product_id = ?')
+      .get(productId) as { product_id: number } | undefined;
+    if (!existing) {
+      throw new AppError(404, 'Product not found.');
+    }
+
+    this.db
+      .prepare('UPDATE products SET is_archived = ? WHERE product_id = ?')
+      .run(isArchived ? 1 : 0, productId);
+
+    return this.getCatalogItemById(productId);
+  }
+
+  listInventoryAdjustments(
+    actorRole: AccountType,
+    productId?: number,
+    limit = 100
+  ): InventoryAdjustmentView[] {
+    if (actorRole !== 'admin') {
+      throw new AppError(403, 'Only administrators can inspect inventory adjustment history.');
+    }
+    const safeLimit = Math.min(200, Math.max(1, Number(limit) || 100));
+    const whereClause = productId && Number.isInteger(productId) && productId > 0 ? 'WHERE ia.product_id = ?' : '';
+    const params: number[] = [];
+    if (whereClause) {
+      params.push(productId!);
+    }
+    params.push(safeLimit);
+
+    return this.db
+      .prepare(
+        `SELECT
+           ia.adjustment_id,
+           ia.product_id,
+           p.product_name,
+           p.sku,
+           ia.account_id,
+           a.full_name AS actor_name,
+           ia.delta,
+           ia.previous_qty,
+           ia.new_qty,
+           ia.reason,
+           ia.adjusted_at
+         FROM inventory_adjustments ia
+         INNER JOIN products p ON p.product_id = ia.product_id
+         INNER JOIN accounts a ON a.account_id = ia.account_id
+         ${whereClause}
+         ORDER BY ia.adjustment_id DESC
+         LIMIT ?`
+      )
+      .all(...params) as unknown as InventoryAdjustmentView[];
   }
 
   processSale(
@@ -518,6 +704,7 @@ export class GreenCartService {
           unitCents: number;
           subtotalCents: number;
           remainingStock: number;
+          reorderLevel: number;
         }> = [];
 
         let totalCents = 0;
@@ -525,17 +712,30 @@ export class GreenCartService {
         for (const [productId, requestedQty] of mergedMap.entries()) {
           const row = this.db
             .prepare(
-              `SELECT p.product_id, p.product_name, CAST(p.price AS REAL) AS price, i.quantity AS stock_qty
+              `SELECT p.product_id, p.product_name, p.is_archived, CAST(p.price AS REAL) AS price, i.quantity AS stock_qty, i.reorder_level
                FROM products p
                INNER JOIN inventory i ON i.product_id = p.product_id
                WHERE p.product_id = ?`
             )
             .get(productId) as
-            | { product_id: number; product_name: string; price: number; stock_qty: number }
+            | {
+                product_id: number;
+                product_name: string;
+                is_archived: number;
+                price: number;
+                stock_qty: number;
+                reorder_level: number;
+              }
             | undefined;
 
           if (!row) {
             throw new AppError(404, `Product #${productId} does not exist.`);
+          }
+          if (row.is_archived) {
+            throw new AppError(
+              400,
+              `"${row.product_name}" is archived and no longer available for sale.`
+            );
           }
           if (row.stock_qty < requestedQty) {
             throw new AppError(
@@ -556,6 +756,7 @@ export class GreenCartService {
             unitCents,
             subtotalCents,
             remainingStock: row.stock_qty - requestedQty,
+            reorderLevel: row.reorder_level,
           });
         }
 
@@ -588,7 +789,7 @@ export class GreenCartService {
           );
           updateInventoryStmt.run(
             line.remainingStock,
-            deriveStockStatus(line.remainingStock),
+            deriveStockStatus(line.remainingStock, line.reorderLevel),
             line.product_id
           );
         }
@@ -831,12 +1032,12 @@ export class GreenCartService {
       .all() as unknown as SafeUser[];
     const products = this.db
       .prepare(
-        'SELECT product_id, product_name, description, CAST(price AS REAL) AS price, category, image_url, sku FROM products ORDER BY product_id ASC'
+        'SELECT product_id, product_name, description, CAST(price AS REAL) AS price, category, image_url, sku, is_archived FROM products ORDER BY product_id ASC'
       )
       .all() as unknown as ProductRow[];
     const inventory = this.db
       .prepare(
-        'SELECT inventory_id, product_id, quantity, stock_status FROM inventory ORDER BY inventory_id ASC'
+        'SELECT inventory_id, product_id, quantity, reorder_level, stock_status FROM inventory ORDER BY inventory_id ASC'
       )
       .all() as unknown as InventoryRow[];
     const transactions = this.db

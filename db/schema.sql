@@ -16,17 +16,20 @@ CREATE TABLE IF NOT EXISTS products (
   price NUMERIC NOT NULL CHECK (price >= 0),
   category TEXT NOT NULL DEFAULT 'Kitchen & Home',
   image_url TEXT,
-  sku TEXT
+  sku TEXT,
+  is_archived INTEGER NOT NULL DEFAULT 0 CHECK (is_archived IN (0, 1))
 );
 
 CREATE INDEX IF NOT EXISTS idx_products_name ON products(product_name);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_products_sku ON products(sku) WHERE sku IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_products_archived ON products(is_archived);
 
 CREATE TABLE IF NOT EXISTS inventory (
   inventory_id INTEGER PRIMARY KEY AUTOINCREMENT,
   product_id INTEGER NOT NULL UNIQUE,
   quantity INTEGER NOT NULL CHECK (quantity >= 0),
+  reorder_level INTEGER NOT NULL DEFAULT 10 CHECK (reorder_level >= 1),
   stock_status TEXT NOT NULL CHECK (stock_status IN ('In Stock', 'Low Stock', 'Out of Stock')),
   FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE
 );
@@ -64,3 +67,19 @@ CREATE TABLE IF NOT EXISTS eco_impact (
   carbon_reduction NUMERIC NOT NULL CHECK (carbon_reduction >= 0),
   FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS inventory_adjustments (
+  adjustment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL,
+  account_id INTEGER NOT NULL,
+  delta INTEGER NOT NULL,
+  previous_qty INTEGER NOT NULL CHECK (previous_qty >= 0),
+  new_qty INTEGER NOT NULL CHECK (new_qty >= 0),
+  reason TEXT NOT NULL,
+  adjusted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE,
+  FOREIGN KEY (account_id) REFERENCES accounts(account_id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_inventory_adjustments_product_date
+  ON inventory_adjustments(product_id, adjusted_at DESC);

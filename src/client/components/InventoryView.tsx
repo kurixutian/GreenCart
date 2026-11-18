@@ -1,10 +1,21 @@
-import { useState, type ChangeEvent, type FormEvent } from 'react';
-import { Boxes, Edit3, Plus, Search, X } from './Icons';
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import { Boxes, Edit3, History, Plus, RotateCcw, Search, X } from './Icons';
 import { api } from '../api';
 import { formatCurrency, getStockBadgeClasses } from '../utils/format';
-import { PRODUCT_CATEGORIES, type CatalogItem, type StockStatus } from '../../shared/types';
+import {
+  PRODUCT_CATEGORIES,
+  type CatalogItem,
+  type InventoryAdjustmentView,
+  type StockStatus,
+} from '../../shared/types';
 
 const FALLBACK_IMAGE = '/images/products/placeholder.svg';
+const ADJUSTMENT_REASONS = [
+  'Quick stock adjustment',
+  'Restock shipment',
+  'Cycle count correction',
+  'Damaged / expired',
+] as const;
 
 interface InventoryViewProps {
   catalog: CatalogItem[];
@@ -22,6 +33,8 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [showArchived, setShowArchived] = useState(false);
+  const [adjustReason, setAdjustReason] = useState<string>(ADJUSTMENT_REASONS[0]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
   const [nameInput, setNameInput] = useState('');
@@ -32,16 +45,37 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
   const [uploadingImage, setUploadingImage] = useState(false);
   const [priceInput, setPriceInput] = useState('');
   const [qtyInput, setQtyInput] = useState('');
+  const [reorderInput, setReorderInput] = useState('10');
   const [saving, setSaving] = useState(false);
+  const [logModalOpen, setLogModalOpen] = useState(false);
+  const [logProductFilter, setLogProductFilter] = useState<string>('ALL');
+  const [adjustments, setAdjustments] = useState<InventoryAdjustmentView[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
   const [inlineEdit, setInlineEdit] = useState<{
     productId: number;
     field: 'price' | 'quantity';
     value: string;
   } | null>(null);
 
+  useEffect(() => {
+    if (!modalOpen && !logModalOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setModalOpen(false);
+        setLogModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [modalOpen, logModalOpen]);
+
+  const activeCatalog = catalog.filter((item) => !item.is_archived);
+  const archivedCount = catalog.length - activeCatalog.length;
+
   // Sort low/out-of-stock SKUs to the top by default (P1.4)
   const filtered = catalog
     .filter((item) => {
+      if (!showArchived && item.is_archived) return false;
       const q = search.trim().toLowerCase();
       const matchesSearch =
         !q ||
@@ -54,13 +88,34 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
       return matchesSearch && matchesStatus && matchesCategory;
     })
     .sort((a, b) => {
+      if (a.is_archived !== b.is_archived) return a.is_archived - b.is_archived;
       const prioDiff = STATUS_PRIORITY[a.stock_status] - STATUS_PRIORITY[b.stock_status];
       return prioDiff !== 0 ? prioDiff : a.product_id - b.product_id;
     });
 
-  const inStockCount = catalog.filter((i) => i.stock_status === 'In Stock').length;
-  const lowStockCount = catalog.filter((i) => i.stock_status === 'Low Stock').length;
-  const outStockCount = catalog.filter((i) => i.stock_status === 'Out of Stock').length;
+  const inStockCount = activeCatalog.filter((i) => i.stock_status === 'In Stock').length;
+  const lowStockCount = activeCatalog.filter((i) => i.stock_status === 'Low Stock').length;
+  const outStockCount = activeCatalog.filter((i) => i.stock_status === 'Out of Stock').length;
+
+  async function loadAdjustmentLogs(productFilter: string) {
+    setLoadingLogs(true);
+    try {
+      const productId = productFilter === 'ALL' ? undefined : Number(productFilter);
+      const rows = await api.getInventoryAdjustments(productId, 100);
+      setAdjustments(rows);
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : 'Failed to load adjustment log.', 'error');
+    } finally {
+      setLoadingLogs(false);
+    }
+  }
+
+  function openAdjustmentLogModal(productId?: number) {
+    const filterValue = productId ? String(productId) : 'ALL';
+    setLogProductFilter(filterValue);
+    setLogModalOpen(true);
+    void loadAdjustmentLogs(filterValue);
+  }
 
   function openAddModal() {
     setEditingItem(null);
@@ -71,6 +126,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
     setImageUrlInput('');
     setPriceInput('');
     setQtyInput('15');
+    setReorderInput('10');
     setModalOpen(true);
   }
 
@@ -83,6 +139,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
     setImageUrlInput(item.image_url || '');
     setPriceInput(String(item.price));
     setQtyInput(String(item.quantity));
+    setReorderInput(String(item.reorder_level ?? 10));
     setModalOpen(true);
   }
 
@@ -109,11 +166,26 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
 
   async function handleAdjust(productId: number, delta: number) {
     try {
-      await api.adjustStock(productId, delta);
+      await api.adjustStock(productId, delta, adjustReason);
       await onRefresh();
-      onNotify(`Stock updated (${delta > 0 ? `+${delta}` : delta}).`);
+      onNotify(`Stock updated (${delta > 0 ? `+${delta}` : delta} · ${adjustReason}).`);
     } catch (err) {
       onNotify(err instanceof Error ? err.message : 'Stock adjustment failed.', 'error');
+    }
+  }
+
+  async function handleToggleArchive(item: CatalogItem) {
+    const nextArchived = !item.is_archived;
+    try {
+      await api.setProductArchived(item.product_id, nextArchived);
+      await onRefresh();
+      onNotify(
+        nextArchived
+          ? `Archived "${item.product_name}". Historical receipts stay intact.`
+          : `Restored "${item.product_name}" to active catalog.`
+      );
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : 'Failed to update archive status.', 'error');
     }
   }
 
@@ -143,9 +215,11 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
         description: item.description,
         price: nextPrice,
         quantity: nextQty,
+        reorder_level: item.reorder_level,
         category: item.category,
         image_url: item.image_url,
         sku: item.sku,
+        adjustment_reason: nextQty !== item.quantity ? adjustReason : undefined,
       });
       await onRefresh();
       onNotify(`Updated ${field} for "${item.product_name}".`);
@@ -163,9 +237,11 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
         description: descInput,
         price: Number(priceInput),
         quantity: Number(qtyInput),
+        reorder_level: Number(reorderInput),
         category: categoryInput,
         image_url: imageUrlInput.trim() || null,
         sku: skuInput.trim() || null,
+        adjustment_reason: editingItem ? adjustReason : undefined,
       };
       if (editingItem) {
         await api.updateProduct(editingItem.product_id, payload);
@@ -197,32 +273,44 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={openAddModal}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-brand-700"
-        >
-          <Plus className="h-4 w-4" />
-          Add New Product
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => openAdjustmentLogModal()}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-xs transition hover:bg-slate-50"
+          >
+            <History className="h-4 w-4 text-slate-600" />
+            Adjustment Log
+          </button>
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-brand-700"
+          >
+            <Plus className="h-4 w-4" />
+            Add New Product
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-          <span className="text-xs font-medium text-slate-500">Total SKUs</span>
-          <p className="mt-1 font-mono text-2xl font-extrabold text-slate-900">{catalog.length}</p>
+          <span className="text-xs font-medium text-slate-600">Active SKUs</span>
+          <p className="mt-1 font-mono text-2xl font-extrabold text-slate-900">
+            {activeCatalog.length}
+          </p>
         </div>
         <div className="rounded-2xl border border-brand-200 bg-brand-50/50 p-4 shadow-xs">
-          <span className="text-xs font-medium text-brand-700">In Stock (&gt;10)</span>
-          <p className="mt-1 font-mono text-2xl font-extrabold text-brand-800">{inStockCount}</p>
+          <span className="text-xs font-medium text-brand-800">In Stock</span>
+          <p className="mt-1 font-mono text-2xl font-extrabold text-brand-900">{inStockCount}</p>
         </div>
         <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 shadow-xs">
-          <span className="text-xs font-medium text-amber-700">Low Stock (1–10)</span>
-          <p className="mt-1 font-mono text-2xl font-extrabold text-amber-800">{lowStockCount}</p>
+          <span className="text-xs font-medium text-amber-800">Low Stock (&le; Reorder)</span>
+          <p className="mt-1 font-mono text-2xl font-extrabold text-amber-900">{lowStockCount}</p>
         </div>
         <div className="rounded-2xl border border-rose-200 bg-rose-50/60 p-4 shadow-xs">
-          <span className="text-xs font-medium text-rose-700">Out of Stock (0)</span>
-          <p className="mt-1 font-mono text-2xl font-extrabold text-rose-800">{outStockCount}</p>
+          <span className="text-xs font-medium text-rose-800">Out of Stock (0)</span>
+          <p className="mt-1 font-mono text-2xl font-extrabold text-rose-900">{outStockCount}</p>
         </div>
       </div>
 
@@ -276,6 +364,30 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                 {status === 'ALL' ? 'All SKUs' : status}
               </button>
             ))}
+            <button
+              type="button"
+              aria-pressed={showArchived}
+              onClick={() => setShowArchived((prev) => !prev)}
+              className={`min-h-11 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                showArchived
+                  ? 'border-slate-900 bg-slate-900 text-white'
+                  : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              Show Archived ({archivedCount})
+            </button>
+            <select
+              aria-label="Stock adjustment reason"
+              value={adjustReason}
+              onChange={(e) => setAdjustReason(e.target.value)}
+              className="min-h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-brand-500"
+            >
+              {ADJUSTMENT_REASONS.map((reason) => (
+                <option key={reason} value={reason}>
+                  Reason: {reason}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -300,23 +412,31 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                       {item.sku ? ` · ${item.sku}` : ''}
                     </p>
                     <p className="mt-0.5 font-mono text-xs font-semibold text-brand-700 tabular-nums">
-                      {formatCurrency(item.price)} · Qty {item.quantity}
+                      {formatCurrency(item.price)} · Qty {item.quantity} · Reorder &le;{' '}
+                      {item.reorder_level}
                     </p>
                   </div>
                 </div>
-                <span
-                  className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${getStockBadgeClasses(
-                    item.stock_status
-                  )}`}
-                >
-                  {item.stock_status}
-                </span>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${getStockBadgeClasses(
+                      item.stock_status
+                    )}`}
+                  >
+                    {item.stock_status}
+                  </span>
+                  {Boolean(item.is_archived) && (
+                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-800">
+                      Archived
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="inline-flex items-center gap-1.5">
                   <button
                     type="button"
-                    disabled={item.quantity <= 0}
+                    disabled={item.quantity <= 0 || Boolean(item.is_archived)}
                     onClick={() => void handleAdjust(item.product_id, -1)}
                     className="min-h-11 min-w-11 rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-mono text-xs font-semibold text-slate-700 disabled:opacity-40"
                   >
@@ -324,27 +444,38 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                   </button>
                   <button
                     type="button"
+                    disabled={Boolean(item.is_archived)}
                     onClick={() => void handleAdjust(item.product_id, 1)}
-                    className="min-h-11 min-w-11 rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-mono text-xs font-semibold text-slate-700"
+                    className="min-h-11 min-w-11 rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-mono text-xs font-semibold text-slate-700 disabled:opacity-40"
                   >
                     +1
                   </button>
                   <button
                     type="button"
+                    disabled={Boolean(item.is_archived)}
                     onClick={() => void handleAdjust(item.product_id, 10)}
-                    className="min-h-11 min-w-11 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 font-mono text-xs font-semibold text-brand-700"
+                    className="min-h-11 min-w-11 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 font-mono text-xs font-semibold text-brand-700 disabled:opacity-40"
                   >
                     +10
                   </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => openEditModal(item)}
-                  className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-1.5 text-xs font-semibold text-slate-700"
-                >
-                  <Edit3 className="h-3.5 w-3.5" />
-                  Edit
-                </button>
+                <div className="inline-flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(item)}
+                    className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-1.5 text-xs font-semibold text-slate-700"
+                  >
+                    <Edit3 className="h-3.5 w-3.5" />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleToggleArchive(item)}
+                    className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                  >
+                    {item.is_archived ? 'Restore' : 'Archive'}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -463,19 +594,31 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                       )}
                     </td>
                     <td className="px-4 py-3.5">
-                      <span
-                        className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${getStockBadgeClasses(
-                          item.stock_status
-                        )}`}
-                      >
-                        {item.stock_status}
-                      </span>
+                      <div className="flex flex-col items-start gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${getStockBadgeClasses(
+                              item.stock_status
+                            )}`}
+                          >
+                            {item.stock_status}
+                          </span>
+                          {Boolean(item.is_archived) && (
+                            <span className="inline-block rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-800">
+                              Archived
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] font-medium text-slate-600">
+                          Reorder &le; {item.reorder_level}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="inline-flex items-center gap-1.5">
                         <button
                           type="button"
-                          disabled={item.quantity <= 0}
+                          disabled={item.quantity <= 0 || Boolean(item.is_archived)}
                           onClick={() => void handleAdjust(item.product_id, -1)}
                           className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-mono text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
                         >
@@ -483,15 +626,17 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                         </button>
                         <button
                           type="button"
+                          disabled={Boolean(item.is_archived)}
                           onClick={() => void handleAdjust(item.product_id, 1)}
-                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-mono text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-mono text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
                         >
                           +1
                         </button>
                         <button
                           type="button"
+                          disabled={Boolean(item.is_archived)}
                           onClick={() => void handleAdjust(item.product_id, 10)}
-                          className="rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 font-mono text-xs font-semibold text-brand-700 hover:bg-brand-100"
+                          className="rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 font-mono text-xs font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-40"
                         >
                           +10
                         </button>
@@ -502,6 +647,20 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                         >
                           <Edit3 className="h-3.5 w-3.5" />
                           Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleToggleArchive(item)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        >
+                          {item.is_archived ? (
+                            <>
+                              <RotateCcw className="h-3.5 w-3.5" />
+                              Restore
+                            </>
+                          ) : (
+                            'Archive'
+                          )}
                         </button>
                       </div>
                     </td>
@@ -517,11 +676,12 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
         <div
           role="dialog"
           aria-modal="true"
+          aria-labelledby="product-form-title"
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
         >
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-lg font-bold text-slate-900">
+              <h3 id="product-form-title" className="text-lg font-bold text-slate-900">
                 {editingItem ? `Edit Product #${editingItem.product_id}` : 'Add New Product'}
               </h3>
               <button
@@ -561,12 +721,16 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  <label
+                    htmlFor="product-price-input"
+                    className="block text-xs font-semibold uppercase tracking-wider text-slate-600"
+                  >
                     Price (PHP)
                   </label>
                   <input
+                    id="product-price-input"
                     type="number"
                     min="0"
                     step="0.01"
@@ -578,16 +742,40 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
+                  <label
+                    htmlFor="product-qty-input"
+                    className="block text-xs font-semibold uppercase tracking-wider text-slate-600"
+                  >
                     Stock Quantity
                   </label>
                   <input
+                    id="product-qty-input"
                     type="number"
                     min="0"
                     step="1"
                     required
                     value={qtyInput}
                     onChange={(e) => setQtyInput(e.target.value)}
+                    className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="product-reorder-input"
+                    className="block text-xs font-semibold uppercase tracking-wider text-slate-600"
+                  >
+                    Reorder Level
+                  </label>
+                  <input
+                    id="product-reorder-input"
+                    type="number"
+                    min="1"
+                    max="10000"
+                    step="1"
+                    required
+                    value={reorderInput}
+                    onChange={(e) => setReorderInput(e.target.value)}
                     className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                   />
                 </div>
@@ -687,6 +875,123 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {logModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="adjustment-log-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
+        >
+          <div className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 id="adjustment-log-title" className="text-lg font-bold text-slate-900">
+                  Inventory Adjustment Audit Log
+                </h3>
+                <p className="text-xs text-slate-600">
+                  Recorded stock additions, cycle counts, and deductions with actor attribution.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close adjustment log"
+                onClick={() => setLogModalOpen(false)}
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+              <label htmlFor="log-product-filter" className="text-xs font-semibold text-slate-700">
+                Filter by Product
+              </label>
+              <select
+                id="log-product-filter"
+                value={logProductFilter}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setLogProductFilter(val);
+                  void loadAdjustmentLogs(val);
+                }}
+                className="min-h-11 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-brand-500"
+              >
+                <option value="ALL">All Products</option>
+                {catalog.map((p) => (
+                  <option key={p.product_id} value={String(p.product_id)}>
+                    {p.product_name}
+                    {p.sku ? ` (${p.sku})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div
+              tabIndex={0}
+              role="region"
+              aria-label="Inventory adjustment audit log entries"
+              className="mt-4 flex-1 overflow-auto rounded-xl border border-slate-200"
+            >
+              {loadingLogs ? (
+                <p className="p-6 text-center text-sm text-slate-600">Loading audit history...</p>
+              ) : adjustments.length === 0 ? (
+                <p className="p-6 text-center text-sm text-slate-600">
+                  No stock adjustments recorded for this selection yet.
+                </p>
+              ) : (
+                <table className="w-full text-left text-xs">
+                  <thead className="sticky top-0 border-b border-slate-200 bg-slate-50 font-semibold uppercase tracking-wider text-slate-700">
+                    <tr>
+                      <th className="px-3 py-2.5">Date</th>
+                      <th className="px-3 py-2.5">Product</th>
+                      <th className="px-3 py-2.5 text-right">Delta</th>
+                      <th className="px-3 py-2.5 text-right">Stock</th>
+                      <th className="px-3 py-2.5">Reason</th>
+                      <th className="px-3 py-2.5">Actor</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {adjustments.map((entry) => (
+                      <tr key={entry.adjustment_id} className="hover:bg-slate-50">
+                        <td className="whitespace-nowrap px-3 py-2.5 font-mono text-slate-700">
+                          {entry.adjusted_at}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <span className="font-semibold text-slate-900">{entry.product_name}</span>
+                          {entry.sku && (
+                            <span className="ml-1.5 font-mono text-[11px] text-slate-600">
+                              {entry.sku}
+                            </span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono font-bold tabular-nums">
+                          <span
+                            className={`rounded-full px-2 py-0.5 ${
+                              entry.delta > 0
+                                ? 'bg-brand-100 text-brand-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono text-slate-700 tabular-nums">
+                          {entry.previous_qty} &rarr; {entry.new_qty}
+                        </td>
+                        <td className="px-3 py-2.5 text-slate-700">{entry.reason}</td>
+                        <td className="whitespace-nowrap px-3 py-2.5 font-medium text-slate-800">
+                          {entry.actor_name}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         </div>
       )}

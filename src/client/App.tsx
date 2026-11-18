@@ -113,7 +113,12 @@ export function App() {
 
   const loadRoleData = useCallback(
     async (activeUser: SafeUser, targetScope: EcoScope) => {
-      const cat = await api.getCatalog();
+      const cat = await api.getCatalog(
+        '',
+        'ALL',
+        'ALL',
+        activeUser.account_type === 'admin'
+      );
       setCatalog(cat);
 
       if (activeUser.account_type === 'customer') {
@@ -382,7 +387,7 @@ export function App() {
           )}
           {adminSection === 'pos' && (
             <PosView
-              catalog={catalog}
+              catalog={catalog.filter((item) => !item.is_archived)}
               customers={customers}
               onSaleCompleted={handleSaleCompleted}
               onNotify={notify}

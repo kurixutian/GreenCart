@@ -188,11 +188,13 @@ export function createApiMiddleware(
 
       // GET /api/catalog
       if (method === 'GET' && pathname === '/api/catalog') {
-        requireAuth();
+        const actor = requireAuth();
         const search = url.searchParams.get('search') || '';
         const status = url.searchParams.get('status') || 'ALL';
         const category = url.searchParams.get('category') || 'ALL';
-        const items = service.listCatalog(search, status, category);
+        const includeArchived =
+          actor.account_type === 'admin' && url.searchParams.get('includeArchived') === '1';
+        const items = service.listCatalog(search, status, category, includeArchived);
         sendJson(res, 200, { items });
         return;
       }
@@ -232,15 +234,19 @@ export function createApiMiddleware(
           description?: string;
           price?: number;
           quantity?: number;
+          reorder_level?: number;
+          is_archived?: boolean | number;
           category?: string;
           image_url?: string | null;
           sku?: string | null;
         }>(req);
-        const item = service.upsertProduct(actor.account_type, {
+        const item = service.upsertProduct(actor, {
           product_name: body.product_name || '',
           description: body.description || '',
           price: Number(body.price),
           quantity: Number(body.quantity),
+          reorder_level: body.reorder_level,
+          is_archived: body.is_archived,
           category: body.category,
           image_url: body.image_url,
           sku: body.sku,
@@ -260,21 +266,51 @@ export function createApiMiddleware(
           description?: string;
           price?: number;
           quantity?: number;
+          reorder_level?: number;
+          is_archived?: boolean | number;
           category?: string;
           image_url?: string | null;
           sku?: string | null;
+          adjustment_reason?: string;
         }>(req);
-        const item = service.upsertProduct(actor.account_type, {
+        const item = service.upsertProduct(actor, {
           product_id: productId,
           product_name: body.product_name || '',
           description: body.description || '',
           price: Number(body.price),
           quantity: Number(body.quantity),
+          reorder_level: body.reorder_level,
+          is_archived: body.is_archived,
           category: body.category,
           image_url: body.image_url,
           sku: body.sku,
+          adjustment_reason: body.adjustment_reason,
         });
         sendJson(res, 200, { item });
+        return;
+      }
+
+      // PATCH /api/products/:id/archive (admin only)
+      const archiveProdMatch = pathname.match(/^\/api\/products\/(\d+)\/archive$/);
+      if (method === 'PATCH' && archiveProdMatch) {
+        const actor = requireAuth();
+        requireCsrf();
+        const productId = Number(archiveProdMatch[1]);
+        const body = await readJsonBody<{ is_archived?: boolean }>(req);
+        const item = service.setProductArchived(actor, productId, Boolean(body.is_archived));
+        sendJson(res, 200, { item });
+        return;
+      }
+
+      // GET /api/inventory/adjustments (admin only)
+      if (method === 'GET' && pathname === '/api/inventory/adjustments') {
+        const actor = requireAuth();
+        const productIdParam = url.searchParams.get('productId');
+        const productId = productIdParam ? Number(productIdParam) : undefined;
+        const limitParam = url.searchParams.get('limit');
+        const limit = limitParam ? Number(limitParam) : 100;
+        const adjustments = service.listInventoryAdjustments(actor.account_type, productId, limit);
+        sendJson(res, 200, { adjustments });
         return;
       }
 
@@ -284,8 +320,13 @@ export function createApiMiddleware(
         const actor = requireAuth();
         requireCsrf();
         const productId = Number(adjustStockMatch[1]);
-        const body = await readJsonBody<{ delta?: number }>(req);
-        const item = service.adjustStock(actor.account_type, productId, Number(body.delta));
+        const body = await readJsonBody<{ delta?: number; reason?: string }>(req);
+        const item = service.adjustStock(
+          actor,
+          productId,
+          Number(body.delta),
+          body.reason || 'Quick stock adjustment'
+        );
         sendJson(res, 200, { item });
         return;
       }

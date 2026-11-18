@@ -196,10 +196,25 @@ test.describe('GreenCart Browser E2E, Mobile P0 & Accessibility', () => {
       expect(firstRowText).toContain('Out of Stock');
     }
 
-    // Phase 1: Verify Admin Add Product modal includes Category & Image Upload
+    // Phase 1 & Phase 3: Verify Add Product modal, Adjustment Audit Log modal (with Axe), and Archive toggle
     await page.getByRole('button', { name: /Add New Product/i }).click();
     await expect(page.locator('#product-category-select')).toBeVisible();
     await expect(page.locator('#product-image-upload')).toBeVisible();
+    await expect(page.locator('#product-reorder-input')).toBeVisible();
     await page.getByRole('button', { name: /Close product form/i }).click();
+
+    await page.getByRole('button', { name: /Adjustment Log/i }).click();
+    await expect(
+      page.getByRole('heading', { name: /Inventory Adjustment Audit Log/i })
+    ).toBeVisible();
+    const logModalAxe = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(logModalAxe.violations).toEqual([]);
+    await page.getByRole('button', { name: /Close adjustment log/i }).click();
+
+    const archiveToggle = page.getByRole('button', { name: /Show Archived/i });
+    await archiveToggle.click();
+    await expect(archiveToggle).toHaveAttribute('aria-pressed', 'true');
   });
 });
