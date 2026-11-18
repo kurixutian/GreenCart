@@ -156,8 +156,10 @@ export class GreenCartService {
     const params: string[] = [];
 
     if (query) {
-      conditions.push('(LOWER(p.product_name) LIKE ? OR LOWER(p.description) LIKE ?)');
-      params.push(`%${query}%`, `%${query}%`);
+      conditions.push(
+        "(LOWER(p.product_name) LIKE ? OR LOWER(p.description) LIKE ? OR LOWER(COALESCE(p.sku, '')) LIKE ?)"
+      );
+      params.push(`%${query}%`, `%${query}%`, `%${query}%`);
     }
 
     if (statusFilter && statusFilter !== 'ALL') {
@@ -181,6 +183,7 @@ export class GreenCartService {
            CAST(p.price AS REAL) AS price,
            p.category,
            p.image_url,
+           p.sku,
            i.inventory_id,
            i.quantity,
            i.stock_status
@@ -253,6 +256,19 @@ export class GreenCartService {
     return { image_url: `/uploads/products/${fileName}` };
   }
 
+  private normalizeSku(raw?: string | null): string | null {
+    if (raw === undefined || raw === null) return null;
+    const trimmed = raw.trim().toUpperCase();
+    if (!trimmed) return null;
+    if (!/^[A-Z0-9-]{3,32}$/.test(trimmed)) {
+      throw new AppError(
+        400,
+        'SKU/barcode must be 3–32 uppercase letters, numbers, or hyphens.'
+      );
+    }
+    return trimmed;
+  }
+
   upsertProduct(
     actorRole: AccountType,
     input: {
@@ -263,6 +279,7 @@ export class GreenCartService {
       quantity: number;
       category?: string;
       image_url?: string | null;
+      sku?: string | null;
     }
   ): CatalogItem {
     if (actorRole !== 'admin') {
@@ -273,6 +290,7 @@ export class GreenCartService {
     const description = input.description.trim();
     const category = (input.category ?? 'Kitchen & Home').trim();
     const imageUrl = this.normalizeImageUrl(input.image_url);
+    const normalizedSku = input.sku === undefined ? undefined : this.normalizeSku(input.sku);
     const price = Number(input.price);
     const quantity = Number(input.quantity);
 
@@ -299,22 +317,43 @@ export class GreenCartService {
     try {
       let targetProductId = input.product_id;
 
+      if (normalizedSku) {
+        const duplicate = this.db
+          .prepare('SELECT product_id FROM products WHERE UPPER(sku) = ? AND product_id != ?')
+          .get(normalizedSku, targetProductId ?? -1) as { product_id: number } | undefined;
+        if (duplicate) {
+          throw new AppError(409, 'SKU/barcode is already assigned to another product.');
+        }
+      }
+
       if (targetProductId !== undefined) {
         const existing = this.db
-          .prepare('SELECT product_id, image_url FROM products WHERE product_id = ?')
-          .get(targetProductId) as { product_id: number; image_url: string | null } | undefined;
+          .prepare('SELECT product_id, image_url, sku FROM products WHERE product_id = ?')
+          .get(targetProductId) as
+          | { product_id: number; image_url: string | null; sku: string | null }
+          | undefined;
         if (!existing) {
           throw new AppError(404, 'Product not found.');
         }
 
         const effectiveImage =
           input.image_url === undefined ? existing.image_url : imageUrl;
+        const effectiveSku =
+          normalizedSku === undefined ? existing.sku : normalizedSku;
 
         this.db
           .prepare(
-            'UPDATE products SET product_name = ?, description = ?, price = ?, category = ?, image_url = ? WHERE product_id = ?'
+            'UPDATE products SET product_name = ?, description = ?, price = ?, category = ?, image_url = ?, sku = ? WHERE product_id = ?'
           )
-          .run(productName, description, normalizedPrice, category, effectiveImage, targetProductId);
+          .run(
+            productName,
+            description,
+            normalizedPrice,
+            category,
+            effectiveImage,
+            effectiveSku,
+            targetProductId
+          );
 
         this.db
           .prepare('UPDATE inventory SET quantity = ?, stock_status = ? WHERE product_id = ?')
@@ -322,9 +361,16 @@ export class GreenCartService {
       } else {
         const insertProd = this.db
           .prepare(
-            'INSERT INTO products (product_name, description, price, category, image_url) VALUES (?, ?, ?, ?, ?)'
+            'INSERT INTO products (product_name, description, price, category, image_url, sku) VALUES (?, ?, ?, ?, ?, ?)'
           )
-          .run(productName, description, normalizedPrice, category, imageUrl);
+          .run(
+            productName,
+            description,
+            normalizedPrice,
+            category,
+            imageUrl,
+            normalizedSku ?? null
+          );
         targetProductId = Number(insertProd.lastInsertRowid);
 
         this.db
@@ -340,7 +386,7 @@ export class GreenCartService {
         .prepare(
           `SELECT
              p.product_id, p.product_name, p.description, CAST(p.price AS REAL) AS price,
-             p.category, p.image_url,
+             p.category, p.image_url, p.sku,
              i.inventory_id, i.quantity, i.stock_status
            FROM products p
            INNER JOIN inventory i ON i.product_id = p.product_id
@@ -392,7 +438,7 @@ export class GreenCartService {
         .prepare(
           `SELECT
              p.product_id, p.product_name, p.description, CAST(p.price AS REAL) AS price,
-             p.category, p.image_url,
+             p.category, p.image_url, p.sku,
              i.inventory_id, i.quantity, i.stock_status
            FROM products p
            INNER JOIN inventory i ON i.product_id = p.product_id
@@ -785,7 +831,7 @@ export class GreenCartService {
       .all() as unknown as SafeUser[];
     const products = this.db
       .prepare(
-        'SELECT product_id, product_name, description, CAST(price AS REAL) AS price, category, image_url FROM products ORDER BY product_id ASC'
+        'SELECT product_id, product_name, description, CAST(price AS REAL) AS price, category, image_url, sku FROM products ORDER BY product_id ASC'
       )
       .all() as unknown as ProductRow[];
     const inventory = this.db

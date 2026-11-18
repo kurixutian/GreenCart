@@ -418,4 +418,32 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
       }
     }
   });
+
+  it('supports Phase 2 optional unique SKUs, SKU search, and duplicate SKU rejection', () => {
+    const admin = service.login('admin_qcu', 'admin123');
+    const bySku = service.listCatalog('ECO-103');
+    expect(bySku.length).toBe(1);
+    expect(bySku[0].sku).toBe('ECO-103');
+
+    const created = service.upsertProduct(admin.account_type, {
+      product_name: 'Compostable Produce Bags',
+      description: 'Roll of 50 plant-starch produce bags.',
+      price: 160,
+      quantity: 20,
+      category: 'Bags & Totes',
+      sku: 'eco-109',
+    });
+    expect(created.sku).toBe('ECO-109');
+
+    // Duplicate SKU rejected with 409
+    expect(() =>
+      service.upsertProduct(admin.account_type, {
+        product_name: 'Duplicate SKU Item',
+        description: 'Should fail on duplicate SKU.',
+        price: 50,
+        quantity: 5,
+        sku: 'ECO-109',
+      })
+    ).toThrowError(/already assigned/);
+  });
 });

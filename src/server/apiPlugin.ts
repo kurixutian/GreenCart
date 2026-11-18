@@ -234,6 +234,7 @@ export function createApiMiddleware(
           quantity?: number;
           category?: string;
           image_url?: string | null;
+          sku?: string | null;
         }>(req);
         const item = service.upsertProduct(actor.account_type, {
           product_name: body.product_name || '',
@@ -242,6 +243,7 @@ export function createApiMiddleware(
           quantity: Number(body.quantity),
           category: body.category,
           image_url: body.image_url,
+          sku: body.sku,
         });
         sendJson(res, 201, { item });
         return;
@@ -260,6 +262,7 @@ export function createApiMiddleware(
           quantity?: number;
           category?: string;
           image_url?: string | null;
+          sku?: string | null;
         }>(req);
         const item = service.upsertProduct(actor.account_type, {
           product_id: productId,
@@ -269,6 +272,7 @@ export function createApiMiddleware(
           quantity: Number(body.quantity),
           category: body.category,
           image_url: body.image_url,
+          sku: body.sku,
         });
         sendJson(res, 200, { item });
         return;

@@ -15,11 +15,13 @@ CREATE TABLE IF NOT EXISTS products (
   description TEXT NOT NULL,
   price NUMERIC NOT NULL CHECK (price >= 0),
   category TEXT NOT NULL DEFAULT 'Kitchen & Home',
-  image_url TEXT
+  image_url TEXT,
+  sku TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_products_name ON products(product_name);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_products_sku ON products(sku) WHERE sku IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS inventory (
   inventory_id INTEGER PRIMARY KEY AUTOINCREMENT,

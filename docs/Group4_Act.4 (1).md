@@ -100,10 +100,11 @@ Submitted to: Mr. Benjamin D. Molinar                                      Score
 
 ---
 
-## ERD v2 Amendment (Approved Phase 1 Product Expansion)
+## ERD v2 Amendment (Approved Phase 1 & Phase 2 Product Expansion)
 
-Preserves the canonical seven entities (`Account`, `Product`, `Inventory`, `Transaction`, `Transaction_Detail`, `Digital_Receipt`, `Eco_Impact`) and extends `Product` via `db/migrations/001_phase1_product_images_and_categories.sql`:
+Preserves the canonical seven entities (`Account`, `Product`, `Inventory`, `Transaction`, `Transaction_Detail`, `Digital_Receipt`, `Eco_Impact`) and extends `Product` via `db/migrations/001_phase1_product_images_and_categories.sql` and `db/migrations/002_phase2_product_sku.sql`:
 - `category` (`TEXT NOT NULL DEFAULT 'Kitchen & Home'`, indexed via `idx_products_category`)
 - `image_url` (`TEXT`, nullable relative asset/upload path or HTTP(S) URL with client fallback)
+- `sku` (`TEXT`, nullable unique SKU/barcode identifier indexed via `idx_products_sku`)
 
 

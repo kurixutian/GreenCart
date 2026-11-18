@@ -124,6 +124,7 @@ export const api = {
     quantity: number;
     category?: string;
     image_url?: string | null;
+    sku?: string | null;
   }): Promise<CatalogItem> {
     const res = await requestJson<{ item: CatalogItem }>('/api/products', {
       method: 'POST',
@@ -141,6 +142,7 @@ export const api = {
       quantity: number;
       category?: string;
       image_url?: string | null;
+      sku?: string | null;
     }
   ): Promise<CatalogItem> {
     const res = await requestJson<{ item: CatalogItem }>(`/api/products/${productId}`, {

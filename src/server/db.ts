@@ -7,15 +7,15 @@ const SCHEMA_PATH = path.join(ROOT_DIR, 'db', 'schema.sql');
 const SEED_PATH = path.join(ROOT_DIR, 'db', 'seed.sql');
 const DEFAULT_DB_PATH = path.join(ROOT_DIR, 'data', 'greencart.sqlite');
 
-const SEED_PRODUCT_META: Array<{ id: number; category: string; image_url: string }> = [
-  { id: 1, category: 'Personal Care', image_url: '/images/products/product-1.svg' },
-  { id: 2, category: 'Bags & Totes', image_url: '/images/products/product-2.svg' },
-  { id: 3, category: 'Drinkware', image_url: '/images/products/product-3.svg' },
-  { id: 4, category: 'Kitchen & Home', image_url: '/images/products/product-4.svg' },
-  { id: 5, category: 'Personal Care', image_url: '/images/products/product-5.svg' },
-  { id: 6, category: 'Stationery', image_url: '/images/products/product-6.svg' },
-  { id: 7, category: 'Kitchen & Home', image_url: '/images/products/product-7.svg' },
-  { id: 8, category: 'Kitchen & Home', image_url: '/images/products/product-8.svg' },
+const SEED_PRODUCT_META: Array<{ id: number; category: string; image_url: string; sku: string }> = [
+  { id: 1, category: 'Personal Care', image_url: '/images/products/product-1.svg', sku: 'ECO-101' },
+  { id: 2, category: 'Bags & Totes', image_url: '/images/products/product-2.svg', sku: 'ECO-102' },
+  { id: 3, category: 'Drinkware', image_url: '/images/products/product-3.svg', sku: 'ECO-103' },
+  { id: 4, category: 'Kitchen & Home', image_url: '/images/products/product-4.svg', sku: 'ECO-104' },
+  { id: 5, category: 'Personal Care', image_url: '/images/products/product-5.svg', sku: 'ECO-105' },
+  { id: 6, category: 'Stationery', image_url: '/images/products/product-6.svg', sku: 'ECO-106' },
+  { id: 7, category: 'Kitchen & Home', image_url: '/images/products/product-7.svg', sku: 'ECO-107' },
+  { id: 8, category: 'Kitchen & Home', image_url: '/images/products/product-8.svg', sku: 'ECO-108' },
 ];
 
 function ensurePhase1ProductColumns(db: DatabaseSync): void {
@@ -33,16 +33,21 @@ function ensurePhase1ProductColumns(db: DatabaseSync): void {
     db.exec('ALTER TABLE products ADD COLUMN image_url TEXT;');
     migrated = true;
   }
+  if (!colNames.has('sku')) {
+    db.exec('ALTER TABLE products ADD COLUMN sku TEXT;');
+    migrated = true;
+  }
 
   db.exec('CREATE INDEX IF NOT EXISTS idx_products_name ON products(product_name);');
   db.exec('CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_products_sku ON products(sku) WHERE sku IS NOT NULL;');
 
   if (migrated) {
     const stmt = db.prepare(
-      'UPDATE products SET category = ?, image_url = COALESCE(image_url, ?) WHERE product_id = ?'
+      'UPDATE products SET category = ?, image_url = COALESCE(image_url, ?), sku = COALESCE(sku, ?) WHERE product_id = ?'
     );
     for (const meta of SEED_PRODUCT_META) {
-      stmt.run(meta.category, meta.image_url, meta.id);
+      stmt.run(meta.category, meta.image_url, meta.sku, meta.id);
     }
   }
 }

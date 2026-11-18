@@ -472,17 +472,16 @@ Deliverable: product images and categories.
 
 **Gate:** current products still load; image/category data is valid; admin and customer views agree.
 
-### Phase 2 — POS and product lookup enhancements
+### Phase 2 — POS and product lookup enhancements (Implemented)
 
 Goal: speed up sales processing.
 
 Tasks:
-- Decide whether SKU/barcode is required.
-- Add SKU/barcode field and uniqueness rule if approved.
-- Implement POS exact-match lookup and keyboard-first behavior.
-- Preserve existing F2/Enter/F4/Escape shortcuts.
-- Verify Walk-In Customer behavior and transaction account association.
-- Add browser tests for normal and invalid scans/searches.
+- [x] Optional unique SKU/barcode field (`products.sku`, seeded `ECO-101`..`ECO-108`) via `db/migrations/002_phase2_product_sku.sql`.
+- [x] Partial unique index `idx_products_sku` and server-side format/uniqueness checks (`409` on duplicate SKU).
+- [x] Exact-match SKU lookup and keyboard-first `Enter` addition in `PosView.tsx` with clear not-found/out-of-stock notifications.
+- [x] Preserved `F2`/`Enter`/`F4`/`Escape` shortcuts and dynamic Walk-In Customer association.
+- [x] Added Vitest SKU/uniqueness tests and Playwright browser tests for valid (`ECO-106`) and unknown (`ECO-999`) POS scans.
 
 Deliverable: faster, more reliable POS product lookup.
 

@@ -81,6 +81,7 @@ export function PosView({
       p.product_name.toLowerCase().includes(q) ||
       p.description.toLowerCase().includes(q) ||
       p.category.toLowerCase().includes(q) ||
+      (p.sku ? p.sku.toLowerCase().includes(q) : false) ||
       String(p.product_id) === q;
     const matchesStatus = statusFilter === 'ALL' || p.stock_status === statusFilter;
     const matchesCategory = categoryFilter === 'ALL' || p.category === categoryFilter;
@@ -101,15 +102,37 @@ export function PosView({
   }
 
   function handleSearchKeyDown(e: ReactKeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter') {
-      const topAvailable = filteredProducts.find(
-        (p) => p.quantity > 0 && getPosQty(p.product_id) < p.quantity
-      );
-      if (topAvailable) {
-        e.preventDefault();
-        addToPosCart(topAvailable);
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const raw = search.trim();
+    if (!raw) return;
+
+    const upper = raw.toUpperCase();
+    const exactSkuMatch = catalog.find((p) => p.sku?.toUpperCase() === upper);
+    if (exactSkuMatch) {
+      const beforeQty = getPosQty(exactSkuMatch.product_id);
+      const next = mutateCart(posCart, exactSkuMatch, exactSkuMatch.product_id, 1, onNotify);
+      setPosCart(next);
+      if ((next.find((c) => c.product_id === exactSkuMatch.product_id)?.quantity ?? 0) > beforeQty) {
+        setSearch('');
       }
+      return;
     }
+
+    const topAvailable = filteredProducts.find(
+      (p) => p.quantity > 0 && getPosQty(p.product_id) < p.quantity
+    );
+    if (topAvailable) {
+      addToPosCart(topAvailable);
+      return;
+    }
+
+    onNotify(
+      filteredProducts.length > 0
+        ? `Matched item(s) have no remaining stock to add.`
+        : `No product matched SKU or search "${raw}".`,
+      'error'
+    );
   }
 
   async function handleCompletePosSale() {
@@ -370,6 +393,7 @@ export function PosView({
                       <span className="font-semibold text-slate-900">{item.product_name}</span>
                       <span className="mt-0.5 block text-[11px] font-medium text-slate-600">
                         {item.category}
+                        {item.sku ? ` · ${item.sku}` : ''}
                       </span>
                     </div>
                     <span

@@ -158,11 +158,16 @@ test.describe('GreenCart Browser E2E, Mobile P0 & Accessibility', () => {
       .analyze();
     expect(overviewAxe.violations).toEqual([]);
 
-    // P1.4: POS keyboard F2 search + Enter add + Complete sale
+    // Phase 2 & P1.4: POS keyboard F2 search, invalid SKU error, and exact SKU scan + Enter add
     await page.getByRole('button', { name: /Open POS Terminal/i }).click();
     await page.keyboard.press('F2');
-    await page.locator('#pos-search-input').fill('Recycled Kraft');
+    await page.locator('#pos-search-input').fill('ECO-999');
     await page.locator('#pos-search-input').press('Enter');
+    await expect(page.getByText(/No product matched SKU or search "ECO-999"/i)).toBeVisible();
+
+    await page.locator('#pos-search-input').fill('ECO-106');
+    await page.locator('#pos-search-input').press('Enter');
+    await expect(page.locator('#pos-search-input')).toHaveValue('');
 
     if (isNarrow) {
       await page.getByRole('button', { name: /Open Register/i }).click();

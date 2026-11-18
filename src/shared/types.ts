@@ -34,6 +34,7 @@ export interface ProductRow {
   price: number;
   category: string;
   image_url: string | null;
+  sku: string | null;
 }
 
 export interface InventoryRow {
@@ -50,6 +51,7 @@ export interface CatalogItem {
   price: number;
   category: string;
   image_url: string | null;
+  sku: string | null;
   inventory_id: number;
   quantity: number;
   stock_status: StockStatus;

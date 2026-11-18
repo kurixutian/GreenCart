@@ -26,6 +26,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
   const [nameInput, setNameInput] = useState('');
   const [descInput, setDescInput] = useState('');
+  const [skuInput, setSkuInput] = useState('');
   const [categoryInput, setCategoryInput] = useState<string>(PRODUCT_CATEGORIES[3]);
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -46,7 +47,8 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
         !q ||
         item.product_name.toLowerCase().includes(q) ||
         item.description.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q);
+        item.category.toLowerCase().includes(q) ||
+        (item.sku ? item.sku.toLowerCase().includes(q) : false);
       const matchesStatus = statusFilter === 'ALL' || item.stock_status === statusFilter;
       const matchesCategory = categoryFilter === 'ALL' || item.category === categoryFilter;
       return matchesSearch && matchesStatus && matchesCategory;
@@ -64,6 +66,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
     setEditingItem(null);
     setNameInput('');
     setDescInput('');
+    setSkuInput('');
     setCategoryInput(PRODUCT_CATEGORIES[3]);
     setImageUrlInput('');
     setPriceInput('');
@@ -75,6 +78,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
     setEditingItem(item);
     setNameInput(item.product_name);
     setDescInput(item.description);
+    setSkuInput(item.sku || '');
     setCategoryInput(item.category);
     setImageUrlInput(item.image_url || '');
     setPriceInput(String(item.price));
@@ -141,6 +145,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
         quantity: nextQty,
         category: item.category,
         image_url: item.image_url,
+        sku: item.sku,
       });
       await onRefresh();
       onNotify(`Updated ${field} for "${item.product_name}".`);
@@ -160,6 +165,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
         quantity: Number(qtyInput),
         category: categoryInput,
         image_url: imageUrlInput.trim() || null,
+        sku: skuInput.trim() || null,
       };
       if (editingItem) {
         await api.updateProduct(editingItem.product_id, payload);
@@ -289,7 +295,10 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                   />
                   <div>
                     <p className="font-bold text-slate-900">{item.product_name}</p>
-                    <p className="mt-0.5 text-[11px] font-medium text-slate-600">{item.category}</p>
+                    <p className="mt-0.5 text-[11px] font-medium text-slate-600">
+                      {item.category}
+                      {item.sku ? ` · ${item.sku}` : ''}
+                    </p>
                     <p className="mt-0.5 font-mono text-xs font-semibold text-brand-700 tabular-nums">
                       {formatCurrency(item.price)} · Qty {item.quantity}
                     </p>
@@ -376,6 +385,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                           <p className="font-semibold text-slate-900">{item.product_name}</p>
                           <p className="mt-0.5 text-[11px] font-medium text-slate-600">
                             {item.category}
+                            {item.sku ? ` · ${item.sku}` : ''}
                           </p>
                         </div>
                       </div>
@@ -583,25 +593,44 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                 </div>
               </div>
 
-              <div>
-                <label
-                  htmlFor="product-category-select"
-                  className="block text-xs font-semibold uppercase tracking-wider text-slate-600"
-                >
-                  Category
-                </label>
-                <select
-                  id="product-category-select"
-                  value={categoryInput}
-                  onChange={(e) => setCategoryInput(e.target.value)}
-                  className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
-                >
-                  {PRODUCT_CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="product-category-select"
+                    className="block text-xs font-semibold uppercase tracking-wider text-slate-600"
+                  >
+                    Category
+                  </label>
+                  <select
+                    id="product-category-select"
+                    value={categoryInput}
+                    onChange={(e) => setCategoryInput(e.target.value)}
+                    className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  >
+                    {PRODUCT_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="product-sku-input"
+                    className="block text-xs font-semibold uppercase tracking-wider text-slate-600"
+                  >
+                    SKU / Barcode (Optional)
+                  </label>
+                  <input
+                    id="product-sku-input"
+                    type="text"
+                    value={skuInput}
+                    onChange={(e) => setSkuInput(e.target.value.toUpperCase())}
+                    placeholder="e.g. ECO-109"
+                    className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm uppercase outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  />
+                </div>
               </div>
 
               <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
