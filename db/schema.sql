@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS products (
   price NUMERIC NOT NULL CHECK (price >= 0)
 );
 
+CREATE INDEX IF NOT EXISTS idx_products_name ON products(product_name);
+
 CREATE TABLE IF NOT EXISTS inventory (
   inventory_id INTEGER PRIMARY KEY AUTOINCREMENT,
   product_id INTEGER NOT NULL UNIQUE,

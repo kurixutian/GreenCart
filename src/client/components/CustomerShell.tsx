@@ -79,11 +79,14 @@ export function CustomerShell({
               type="button"
               onClick={onOpenCart}
               aria-label="Open shopping cart"
-              className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3.5 py-2 text-xs font-bold text-brand-800 transition hover:bg-brand-100"
+              className="inline-flex min-h-11 items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3.5 py-2 text-xs font-bold text-brand-800 transition hover:bg-brand-100"
             >
               <ShoppingCart className="h-4 w-4 text-brand-600" />
               <span>Cart</span>
-              <span className="inline-flex min-w-[1.35rem] items-center justify-center rounded-full bg-brand-600 px-1.5 py-0.5 font-mono text-[11px] text-white">
+              <span
+                key={cartCount}
+                className="inline-flex min-w-[1.35rem] items-center justify-center rounded-full bg-brand-600 px-1.5 py-0.5 font-mono text-[11px] text-white transition-transform duration-200"
+              >
                 {cartCount}
               </span>
             </button>
@@ -96,7 +99,7 @@ export function CustomerShell({
               type="button"
               onClick={onLogout}
               aria-label="Sign Out"
-              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
             >
               <LogOut className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Sign Out</span>
@@ -121,8 +124,8 @@ export function CustomerShell({
                 key={item.key}
                 type="button"
                 onClick={() => onNavigate(item.key)}
-                className={`flex flex-col items-center justify-center rounded-xl py-1.5 text-[10px] font-semibold transition ${
-                  active ? 'bg-brand-50 text-brand-700' : 'text-slate-500'
+                className={`flex min-h-11 flex-col items-center justify-center rounded-xl py-1.5 text-[10px] font-semibold transition ${
+                  active ? 'bg-brand-50 text-brand-700' : 'text-slate-600'
                 }`}
               >
                 <Icon className="mb-0.5 h-4 w-4" />
@@ -133,7 +136,7 @@ export function CustomerShell({
           <button
             type="button"
             onClick={onOpenCart}
-            className="relative flex flex-col items-center justify-center rounded-xl bg-brand-600 py-1.5 text-[10px] font-bold text-white shadow-xs"
+            className="relative flex min-h-11 flex-col items-center justify-center rounded-xl bg-brand-600 py-1.5 text-[10px] font-bold text-white shadow-xs"
           >
             <ShoppingCart className="mb-0.5 h-4 w-4" />
             <span>Cart ({cartCount})</span>

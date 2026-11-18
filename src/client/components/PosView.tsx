@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   Leaf,
   Minus,
@@ -43,6 +43,7 @@ export function PosView({
   const [selectedCustomerId, setSelectedCustomerId] = useState<number>(0);
   const [mobileRegisterOpen, setMobileRegisterOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (customers.length === 0) return;
@@ -53,12 +54,31 @@ export function PosView({
     }
   }, [customers, selectedCustomerId]);
 
+  // POS keyboard shortcuts: F2 focus search, F4 toggle mobile drawer, Esc clear/close
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F2') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === 'F4') {
+        e.preventDefault();
+        setMobileRegisterOpen((prev) => !prev);
+      } else if (e.key === 'Escape') {
+        if (mobileRegisterOpen) setMobileRegisterOpen(false);
+        else if (search) setSearch('');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [mobileRegisterOpen, search]);
+
   const filteredProducts = catalog.filter((p) => {
     const q = search.trim().toLowerCase();
     const matchesQuery =
       !q ||
       p.product_name.toLowerCase().includes(q) ||
-      p.description.toLowerCase().includes(q);
+      p.description.toLowerCase().includes(q) ||
+      String(p.product_id) === q;
     const matchesStatus = statusFilter === 'ALL' || p.stock_status === statusFilter;
     return matchesQuery && matchesStatus;
   });
@@ -74,6 +94,18 @@ export function PosView({
   function updatePosQty(productId: number, delta: number) {
     const prod = catalog.find((p) => p.product_id === productId);
     setPosCart((prev) => mutateCart(prev, prod, productId, delta, onNotify));
+  }
+
+  function handleSearchKeyDown(e: ReactKeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      const topAvailable = filteredProducts.find(
+        (p) => p.quantity > 0 && getPosQty(p.product_id) < p.quantity
+      );
+      if (topAvailable) {
+        e.preventDefault();
+        addToPosCart(topAvailable);
+      }
+    }
   }
 
   async function handleCompletePosSale() {
@@ -121,7 +153,7 @@ export function PosView({
           <button
             type="button"
             onClick={() => setPosCart([])}
-            className="text-xs font-medium text-slate-300 hover:text-white"
+            className="min-h-11 px-2 text-xs font-medium text-slate-300 hover:text-white"
           >
             Clear Sale
           </button>
@@ -140,7 +172,7 @@ export function PosView({
           id={selectId}
           value={selectedCustomerId}
           onChange={(e) => setSelectedCustomerId(Number(e.target.value))}
-          className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+          className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
         >
           {customers.map((cust) => (
             <option key={cust.account_id} value={cust.account_id}>
@@ -153,9 +185,9 @@ export function PosView({
       <div className="flex-1 divide-y divide-slate-100 overflow-y-auto px-5 py-2 lg:max-h-80">
         {lineViews.length === 0 ? (
           <div className="py-10 text-center">
-            <p className="text-sm font-medium text-slate-500">No items added to register</p>
+            <p className="text-sm font-medium text-slate-600">No items added to register</p>
             <p className="mt-1 text-xs text-slate-500">
-              Select products on the left to start ringing up a sale.
+              Select products on the left or press F2 to search and Enter to add.
             </p>
           </div>
         ) : (
@@ -178,7 +210,7 @@ export function PosView({
                     type="button"
                     aria-label={`Decrease ${product.product_name}`}
                     onClick={() => updatePosQty(product.product_id, -1)}
-                    className="p-2 text-slate-600 hover:text-slate-900"
+                    className="inline-flex min-h-11 min-w-11 items-center justify-center text-slate-600 hover:text-slate-900"
                   >
                     <Minus className="h-3.5 w-3.5" />
                   </button>
@@ -190,7 +222,7 @@ export function PosView({
                     aria-label={`Increase ${product.product_name}`}
                     disabled={quantity >= product.quantity}
                     onClick={() => updatePosQty(product.product_id, 1)}
-                    className="p-2 text-slate-600 hover:text-slate-900 disabled:opacity-40"
+                    className="inline-flex min-h-11 min-w-11 items-center justify-center text-slate-600 hover:text-slate-900 disabled:opacity-40"
                   >
                     <Plus className="h-3.5 w-3.5" />
                   </button>
@@ -201,7 +233,7 @@ export function PosView({
                   onClick={() =>
                     setPosCart((prev) => prev.filter((c) => c.product_id !== product.product_id))
                   }
-                  className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-600"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -235,7 +267,7 @@ export function PosView({
           type="button"
           disabled={lineViews.length === 0 || submitting || selectedCustomerId <= 0}
           onClick={() => void handleCompletePosSale()}
-          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <QrCode className="h-4 w-4" />
           {submitting
@@ -255,18 +287,33 @@ export function PosView({
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Admin Point of Sale</h2>
                 <p className="text-xs text-slate-500">
-                  Tap products to add them to the current sale register.
+                  Shortcuts: <span className="font-mono font-semibold">F2</span> search ·{' '}
+                  <span className="font-mono font-semibold">Enter</span> quick-add ·{' '}
+                  <span className="font-mono font-semibold">Esc</span> clear.
                 </p>
               </div>
               <div className="relative w-full sm:w-64">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
-                  type="search"
+                  ref={searchInputRef}
+                  id="pos-search-input"
+                  type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search POS products..."
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20"
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder="Search SKU # or product..."
+                  className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-9 text-sm outline-none transition focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20"
                 />
+                {search && (
+                  <button
+                    type="button"
+                    aria-label="Clear POS search"
+                    onClick={() => setSearch('')}
+                    className="absolute right-1.5 top-1/2 inline-flex min-h-9 min-w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -276,10 +323,10 @@ export function PosView({
                   key={status}
                   type="button"
                   onClick={() => setStatusFilter(status)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  className={`min-h-11 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                     statusFilter === status
                       ? 'bg-slate-900 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
                   {status === 'ALL' ? 'All SKUs' : status}
@@ -299,7 +346,7 @@ export function PosView({
                   type="button"
                   disabled={disabled}
                   onClick={() => addToPosCart(item)}
-                  className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-xs transition hover:border-brand-400 hover:bg-brand-50/30 disabled:cursor-not-allowed disabled:opacity-55"
+                  className="flex min-h-24 flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-xs transition hover:border-brand-400 hover:bg-brand-50/30 disabled:cursor-not-allowed disabled:opacity-55"
                 >
                   <div className="flex w-full items-start justify-between gap-2">
                     <span className="font-semibold text-slate-900">{item.product_name}</span>
@@ -333,12 +380,11 @@ export function PosView({
         </aside>
       </div>
 
-      {/* Mobile Floating Current Sale Trigger */}
       <div className="fixed inset-x-4 bottom-20 z-30 lg:hidden">
         <button
           type="button"
           onClick={() => setMobileRegisterOpen(true)}
-          className="flex w-full items-center justify-between rounded-2xl bg-slate-900 px-4 py-3 text-white shadow-xl"
+          className="flex min-h-12 w-full items-center justify-between rounded-2xl bg-slate-900 px-4 py-3 text-white shadow-xl"
         >
           <span className="flex items-center gap-2 text-xs font-bold">
             <ShoppingBag className="h-4 w-4 text-brand-400" />
@@ -350,7 +396,6 @@ export function PosView({
         </button>
       </div>
 
-      {/* Mobile Bottom-Sheet POS Register */}
       {mobileRegisterOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 backdrop-blur-xs lg:hidden">
           <div className="relative flex max-h-[88vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl">
@@ -358,7 +403,7 @@ export function PosView({
               type="button"
               aria-label="Close POS Register"
               onClick={() => setMobileRegisterOpen(false)}
-              className="absolute right-4 top-3.5 z-10 rounded-lg p-1.5 text-slate-300 hover:bg-white/10 hover:text-white"
+              className="absolute right-3 top-2.5 z-10 inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white"
             >
               <X className="h-5 w-5" />
             </button>

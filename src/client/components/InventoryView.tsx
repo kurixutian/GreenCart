@@ -2,13 +2,19 @@ import { useState, type FormEvent } from 'react';
 import { Boxes, Edit3, Plus, Search, X } from './Icons';
 import { api } from '../api';
 import { formatCurrency, getStockBadgeClasses } from '../utils/format';
-import type { CatalogItem } from '../../shared/types';
+import type { CatalogItem, StockStatus } from '../../shared/types';
 
 interface InventoryViewProps {
   catalog: CatalogItem[];
   onRefresh: () => Promise<void>;
   onNotify: (message: string, type?: 'success' | 'error') => void;
 }
+
+const STATUS_PRIORITY: Record<StockStatus, number> = {
+  'Out of Stock': 0,
+  'Low Stock': 1,
+  'In Stock': 2,
+};
 
 export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewProps) {
   const [search, setSearch] = useState('');
@@ -20,16 +26,27 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
   const [priceInput, setPriceInput] = useState('');
   const [qtyInput, setQtyInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const [inlineEdit, setInlineEdit] = useState<{
+    productId: number;
+    field: 'price' | 'quantity';
+    value: string;
+  } | null>(null);
 
-  const filtered = catalog.filter((item) => {
-    const q = search.trim().toLowerCase();
-    const matchesSearch =
-      !q ||
-      item.product_name.toLowerCase().includes(q) ||
-      item.description.toLowerCase().includes(q);
-    const matchesStatus = statusFilter === 'ALL' || item.stock_status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  // Sort low/out-of-stock SKUs to the top by default (P1.4)
+  const filtered = catalog
+    .filter((item) => {
+      const q = search.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        item.product_name.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q);
+      const matchesStatus = statusFilter === 'ALL' || item.stock_status === statusFilter;
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      const prioDiff = STATUS_PRIORITY[a.stock_status] - STATUS_PRIORITY[b.stock_status];
+      return prioDiff !== 0 ? prioDiff : a.product_id - b.product_id;
+    });
 
   const inStockCount = catalog.filter((i) => i.stock_status === 'In Stock').length;
   const lowStockCount = catalog.filter((i) => i.stock_status === 'Low Stock').length;
@@ -60,6 +77,40 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
       onNotify(`Stock updated (${delta > 0 ? `+${delta}` : delta}).`);
     } catch (err) {
       onNotify(err instanceof Error ? err.message : 'Stock adjustment failed.', 'error');
+    }
+  }
+
+  async function commitInlineEdit(item: CatalogItem) {
+    if (!inlineEdit || inlineEdit.productId !== item.product_id) return;
+    const rawVal = Number(inlineEdit.value);
+    const field = inlineEdit.field;
+    setInlineEdit(null);
+
+    if (!Number.isFinite(rawVal) || rawVal < 0 || (field === 'quantity' && !Number.isInteger(rawVal))) {
+      onNotify(
+        field === 'quantity'
+          ? 'Stock quantity must be a non-negative integer.'
+          : 'Price must be a non-negative number.',
+        'error'
+      );
+      return;
+    }
+
+    const nextPrice = field === 'price' ? Number(rawVal.toFixed(2)) : item.price;
+    const nextQty = field === 'quantity' ? rawVal : item.quantity;
+    if (nextPrice === item.price && nextQty === item.quantity) return;
+
+    try {
+      await api.updateProduct(item.product_id, {
+        product_name: item.product_name,
+        description: item.description,
+        price: nextPrice,
+        quantity: nextQty,
+      });
+      await onRefresh();
+      onNotify(`Updated ${field} for "${item.product_name}".`);
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : 'Inline update failed.', 'error');
     }
   }
 
@@ -99,22 +150,20 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
           <div>
             <h2 className="text-lg font-bold text-slate-900">Inventory &amp; Catalog Management</h2>
             <p className="text-xs text-slate-500">
-              Manage baseline <span className="font-mono">products</span> and synchronized{' '}
-              <span className="font-mono">inventory</span> levels.
+              Low-stock alerts appear first. Click any price or quantity to edit inline.
             </p>
           </div>
         </div>
         <button
           type="button"
           onClick={openAddModal}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-brand-700"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-brand-700"
         >
           <Plus className="h-4 w-4" />
           Add New Product
         </button>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <span className="text-xs font-medium text-slate-500">Total SKUs</span>
@@ -134,18 +183,27 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
         </div>
       </div>
 
-      {/* Responsive Inventory Toolbar + Mobile Cards + Desktop Table */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative flex-1 sm:max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
-              type="search"
+              type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Filter inventory items..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand-500 focus:bg-white"
+              className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-9 text-sm outline-none focus:border-brand-500 focus:bg-white"
             />
+            {search && (
+              <button
+                type="button"
+                aria-label="Clear inventory filter"
+                onClick={() => setSearch('')}
+                className="absolute right-1.5 top-1/2 inline-flex min-h-9 min-w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
           <div className="flex flex-wrap gap-1.5">
             {['ALL', 'In Stock', 'Low Stock', 'Out of Stock'].map((status) => (
@@ -153,10 +211,10 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                 key={status}
                 type="button"
                 onClick={() => setStatusFilter(status)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                className={`min-h-11 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                   statusFilter === status
                     ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
                 {status === 'ALL' ? 'All SKUs' : status}
@@ -190,21 +248,21 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                     type="button"
                     disabled={item.quantity <= 0}
                     onClick={() => void handleAdjust(item.product_id, -1)}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-mono text-xs font-semibold text-slate-700 disabled:opacity-40"
+                    className="min-h-11 min-w-11 rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-mono text-xs font-semibold text-slate-700 disabled:opacity-40"
                   >
                     -1
                   </button>
                   <button
                     type="button"
                     onClick={() => void handleAdjust(item.product_id, 1)}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-mono text-xs font-semibold text-slate-700"
+                    className="min-h-11 min-w-11 rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-mono text-xs font-semibold text-slate-700"
                   >
                     +1
                   </button>
                   <button
                     type="button"
                     onClick={() => void handleAdjust(item.product_id, 10)}
-                    className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 font-mono text-xs font-semibold text-brand-700"
+                    className="min-h-11 min-w-11 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 font-mono text-xs font-semibold text-brand-700"
                   >
                     +10
                   </button>
@@ -212,7 +270,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                 <button
                   type="button"
                   onClick={() => openEditModal(item)}
-                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                  className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-1.5 text-xs font-semibold text-slate-700"
                 >
                   <Edit3 className="h-3.5 w-3.5" />
                   Edit
@@ -222,9 +280,10 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
           ))}
         </div>
 
+        {/* Desktop Table with Inline Price & Quantity Editing */}
         <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-600">
               <tr>
                 <th className="px-5 py-3">Product</th>
                 <th className="px-4 py-3 text-right">Price</th>
@@ -234,73 +293,149 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((item) => (
-                <tr key={item.product_id} className="hover:bg-slate-50/70">
-                  <td className="px-5 py-3.5">
-                    <p className="font-semibold text-slate-900">{item.product_name}</p>
-                    <p className="mt-0.5 line-clamp-1 max-w-md text-xs text-slate-500">
-                      {item.description}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3.5 text-right font-mono font-semibold text-slate-900 tabular-nums">
-                    {formatCurrency(item.price)}
-                  </td>
-                  <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900 tabular-nums">
-                    {item.quantity}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <span
-                      className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${getStockBadgeClasses(
-                        item.stock_status
-                      )}`}
-                    >
-                      {item.stock_status}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <div className="inline-flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        disabled={item.quantity <= 0}
-                        onClick={() => void handleAdjust(item.product_id, -1)}
-                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-mono text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+              {filtered.map((item) => {
+                const editingPrice =
+                  inlineEdit?.productId === item.product_id && inlineEdit.field === 'price';
+                const editingQty =
+                  inlineEdit?.productId === item.product_id && inlineEdit.field === 'quantity';
+
+                return (
+                  <tr key={item.product_id} className="hover:bg-slate-50/70">
+                    <td className="px-5 py-3.5">
+                      <p className="font-semibold text-slate-900">{item.product_name}</p>
+                      <p className="mt-0.5 line-clamp-1 max-w-md text-xs text-slate-500">
+                        {item.description}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono font-semibold text-slate-900 tabular-nums">
+                      {editingPrice ? (
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          autoFocus
+                          aria-label={`Edit price for ${item.product_name}`}
+                          value={inlineEdit.value}
+                          onChange={(e) =>
+                            setInlineEdit({ ...inlineEdit, value: e.target.value })
+                          }
+                          onBlur={() => void commitInlineEdit(item)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') void commitInlineEdit(item);
+                            if (e.key === 'Escape') setInlineEdit(null);
+                          }}
+                          className="w-24 rounded-lg border border-brand-500 px-2 py-1 text-right font-mono text-xs outline-none"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          title="Click to edit price inline"
+                          onClick={() =>
+                            setInlineEdit({
+                              productId: item.product_id,
+                              field: 'price',
+                              value: String(item.price),
+                            })
+                          }
+                          className="rounded px-1.5 py-0.5 hover:bg-brand-50 hover:text-brand-700"
+                        >
+                          {formatCurrency(item.price)}
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900 tabular-nums">
+                      {editingQty ? (
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          autoFocus
+                          aria-label={`Edit quantity for ${item.product_name}`}
+                          value={inlineEdit.value}
+                          onChange={(e) =>
+                            setInlineEdit({ ...inlineEdit, value: e.target.value })
+                          }
+                          onBlur={() => void commitInlineEdit(item)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') void commitInlineEdit(item);
+                            if (e.key === 'Escape') setInlineEdit(null);
+                          }}
+                          className="w-20 rounded-lg border border-brand-500 px-2 py-1 text-right font-mono text-xs outline-none"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          title="Click to edit quantity inline"
+                          onClick={() =>
+                            setInlineEdit({
+                              productId: item.product_id,
+                              field: 'quantity',
+                              value: String(item.quantity),
+                            })
+                          }
+                          className="rounded px-1.5 py-0.5 hover:bg-brand-50 hover:text-brand-700"
+                        >
+                          {item.quantity}
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span
+                        className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${getStockBadgeClasses(
+                          item.stock_status
+                        )}`}
                       >
-                        -1
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleAdjust(item.product_id, 1)}
-                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-mono text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                      >
-                        +1
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleAdjust(item.product_id, 10)}
-                        className="rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 font-mono text-xs font-semibold text-brand-700 hover:bg-brand-100"
-                      >
-                        +10
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(item)}
-                        className="ml-1 inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200"
-                      >
-                        <Edit3 className="h-3.5 w-3.5" />
-                        Edit
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {item.stock_status}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <div className="inline-flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          disabled={item.quantity <= 0}
+                          onClick={() => void handleAdjust(item.product_id, -1)}
+                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-mono text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                        >
+                          -1
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleAdjust(item.product_id, 1)}
+                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-mono text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        >
+                          +1
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleAdjust(item.product_id, 10)}
+                          className="rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 font-mono text-xs font-semibold text-brand-700 hover:bg-brand-100"
+                        >
+                          +10
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(item)}
+                          className="ml-1 inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                        >
+                          <Edit3 className="h-3.5 w-3.5" />
+                          Edit
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Add / Edit Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
+        >
           <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-lg font-bold text-slate-900">
@@ -308,8 +443,9 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
               </h3>
               <button
                 type="button"
+                aria-label="Close product form"
                 onClick={() => setModalOpen(false)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -325,7 +461,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                   required
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                 />
               </div>
 
@@ -354,7 +490,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                     required
                     value={priceInput}
                     onChange={(e) => setPriceInput(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                    className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                   />
                 </div>
 
@@ -369,7 +505,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                     required
                     value={qtyInput}
                     onChange={(e) => setQtyInput(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                    className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                   />
                 </div>
               </div>
@@ -378,14 +514,14 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                  className="min-h-11 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                  className="min-h-11 rounded-xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                 >
                   {saving ? 'Saving...' : editingItem ? 'Save Changes' : 'Create Product'}
                 </button>

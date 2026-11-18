@@ -15,6 +15,7 @@ import type { DigitalReceiptView } from '../../shared/types';
 
 interface ReceiptViewProps {
   activeReceipt: DigitalReceiptView | null;
+  justCompleted?: boolean;
   onSelectReceipt: (receipt: DigitalReceiptView) => void;
   recentTokens: string[];
   onNotify: (message: string, type?: 'success' | 'error') => void;
@@ -24,6 +25,7 @@ interface ReceiptViewProps {
 
 export function ReceiptView({
   activeReceipt,
+  justCompleted = false,
   onSelectReceipt,
   recentTokens,
   onNotify,
@@ -73,6 +75,17 @@ export function ReceiptView({
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
+      {justCompleted && activeReceipt && (
+        <div
+          role="status"
+          className="flex items-center gap-3 rounded-2xl border border-brand-300 bg-brand-50 p-4 text-sm font-semibold text-brand-900 print:hidden"
+        >
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-brand-700" />
+          <span>
+            Order confirmed — your paperless digital receipt ({activeReceipt.qr_code}) is ready.
+          </span>
+        </div>
+      )}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs print:hidden">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

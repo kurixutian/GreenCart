@@ -123,11 +123,18 @@ export function createApiMiddleware(
     };
 
     try {
-      // GET /api/auth/me
+      // GET /api/auth/me (refreshes rolling 30-minute session when authenticated)
       if (method === 'GET' && pathname === '/api/auth/me') {
-        const csrfToken =
-          sessionUser && sessionToken ? createCsrfToken(sessionToken, secret) : null;
-        sendJson(res, 200, { user: sessionUser, csrfToken });
+        if (sessionUser) {
+          const refreshedToken = signSessionToken(sessionUser, secret);
+          const refreshedCsrf = createCsrfToken(refreshedToken, secret);
+          sendJson(res, 200, { user: sessionUser, csrfToken: refreshedCsrf }, [
+            `${SESSION_COOKIE}=${encodeURIComponent(refreshedToken)}; HttpOnly; Path=/; SameSite=Lax${COOKIE_SECURITY}`,
+            `${CSRF_COOKIE}=${encodeURIComponent(refreshedCsrf)}; Path=/; SameSite=Lax${COOKIE_SECURITY}`,
+          ]);
+          return;
+        }
+        sendJson(res, 200, { user: null, csrfToken: null });
         return;
       }
 

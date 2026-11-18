@@ -294,3 +294,16 @@ Do not attempt to redesign all of GreenCart in a single prompt—the repository 
 - **Existing Tests & Build:** `npx vitest run tests/greencart.test.ts` (`7/7` tests passing), `tsc --noEmit` (`0` errors), `vite build` (`90` modules transformed, clean bundle in `dist/`).
 - **Design Tokens (`src/client/index.css`):** `Plus Jakarta Sans` UI sans, `JetBrains Mono` tabular figures, and Ogani botanical palette (`brand-50` `#f4f9ee` through `brand-900` `#35491e`).
 - **Baseline UI Architecture:** `App.tsx` previously rendered one shared navigation header for both `customer` and `admin`; `PosView.tsx` defaulted `selectedCustomerId` to hard-coded `3`; `ReceiptView.tsx` lacked print actions; `HistoryView.tsx` and `InventoryView.tsx` rendered desktop tables without dedicated mobile card views; `crypto.ts` generated 48-bit receipt tokens without session `exp`.
+
+---
+
+## 11. Resolved Items Status (`P0` → `P2`)
+
+- `[x]` **P0.1 Mobile-First & Role-Separated Shells:** Separate `CustomerShell` and `AdminShell`, `375×667` zero-overflow cards, bottom-sheet cart & POS register, and `≥44px` (`min-h-11`) touch targets with audit screenshots in `docs/mobile-audit/`.
+- `[x]` **P1.1 Checkout Confirmation & Feedback:** 2-step confirmation review, disabled pending states, and post-checkout confirmation banner on `ReceiptView`.
+- `[x]` **P1.2 Cart Persistence & Toast Feedback:** `localStorage` cart persistence, badge count updates, and `"View Cart"` action inside add-to-cart toasts.
+- `[x]` **P1.3 Product Sorting & Accessible Detail Modal:** URL-persisted `?sort=` (including Name A–Z / Z–A, Price, Stock), search clear (`×`) button, and `Escape`-closable Product Detail modal.
+- `[x]` **P1.4 POS Shortcuts & Inventory Inline Editing:** SQLite `idx_products_name` index, POS `F2`/`Enter`/`F4`/`Escape` shortcuts, low/out-of-stock priority sorting, and inline price/quantity editing.
+- `[x]` **P1.5 Token-Only Enriched Receipts:** Print stylesheet (`window.print()`), 128-bit opaque QR tokens in `?receipt=`, and full itemized + Eco-Impact display.
+- `[x]` **P2.1 Rolling Session Expiration & Production Hardening:** 30-minute rolling `exp` session cookies, 25-minute idle warning modal (`Stay logged in` / `Log out`), and mandatory `GREENCART_SESSION_SECRET` + `Secure` cookies in production.
+- `[x]` **P2.2 Playwright + Axe Browser QA & CI:** Automated desktop (`1440×900`) and mobile (`375×667`) E2E workflows, WCAG 2A/2AA Axe audits, and `.github/workflows/ci.yml`.

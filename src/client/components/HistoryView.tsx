@@ -5,7 +5,7 @@ import type { PurchaseHistoryItem } from '../../shared/types';
 
 interface HistoryViewProps {
   history: PurchaseHistoryItem[];
-  onViewReceipt: (transactionId: number) => void;
+  onViewReceipt: (qrCode: string) => void;
 }
 
 export function HistoryView({ history, onViewReceipt }: HistoryViewProps) {
@@ -91,8 +91,8 @@ export function HistoryView({ history, onViewReceipt }: HistoryViewProps) {
                   </span>
                   <button
                     type="button"
-                    onClick={() => onViewReceipt(row.transaction_id)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white"
+                    onClick={() => onViewReceipt(row.qr_code)}
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white"
                   >
                     <QrCode className="h-3.5 w-3.5" />
                     View Receipt
@@ -141,7 +141,7 @@ export function HistoryView({ history, onViewReceipt }: HistoryViewProps) {
                     <td className="px-5 py-4 text-right">
                       <button
                         type="button"
-                        onClick={() => onViewReceipt(row.transaction_id)}
+                        onClick={() => onViewReceipt(row.qr_code)}
                         className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-600 hover:text-white"
                       >
                         <QrCode className="h-3.5 w-3.5" />

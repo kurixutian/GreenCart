@@ -19,11 +19,11 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop-chromium',
-      use: { viewport: { width: 1280, height: 800 } },
+      use: { viewport: { width: 1440, height: 900 } },
     },
     {
       name: 'mobile-chromium',
-      use: { viewport: { width: 390, height: 844 } },
+      use: { viewport: { width: 375, height: 667 } },
     },
   ],
 });

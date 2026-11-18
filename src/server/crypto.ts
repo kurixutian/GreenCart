@@ -26,7 +26,7 @@ export function verifyPassword(password: string, storedHash: string): boolean {
   return crypto.timingSafeEqual(actualBuf, expectedBuf);
 }
 
-const DEFAULT_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const DEFAULT_SESSION_TTL_MS = 30 * 60 * 1000;
 
 export function generateOpaqueReceiptToken(): string {
   const hex = crypto.randomBytes(16).toString('hex').toUpperCase();
