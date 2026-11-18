@@ -168,12 +168,63 @@ export interface EcoImpactLedgerRow {
   carbon_reduction: number;
 }
 
+export interface EcoImpactMetricSpec {
+  key: 'paper_saved' | 'carbon_reduction' | 'paperless_count';
+  label: string;
+  unit: string;
+  is_estimate: boolean;
+  documented_in: string[];
+}
+
+export interface EcoImpactSpecification {
+  base_receipt_sheets: number;
+  sheets_per_distinct_line_item: number;
+  grams_co2e_per_sheet: number;
+  formula_note: string;
+  metrics: EcoImpactMetricSpec[];
+  pending_approval_note: string;
+}
+
+export const ECO_IMPACT_SPEC: EcoImpactSpecification = {
+  base_receipt_sheets: 1.0,
+  sheets_per_distinct_line_item: 0.25,
+  grams_co2e_per_sheet: 3.5,
+  formula_note:
+    'Estimated impact: 1.00 base receipt sheet + 0.25 sheets per distinct line item; 3.50 g CO2e avoided per thermal sheet saved.',
+  metrics: [
+    {
+      key: 'paper_saved',
+      label: 'Paper Saved',
+      unit: 'sheets',
+      is_estimate: true,
+      documented_in: ['Group4_Act.3 (1).md', 'Group4_Act.4 (1).md', 'Group4_Wireframe.md'],
+    },
+    {
+      key: 'carbon_reduction',
+      label: 'Carbon Reduction',
+      unit: 'g CO₂e',
+      is_estimate: true,
+      documented_in: ['Group4_Act.3 (1).md', 'Group4_Act.4 (1).md', 'Group4_Wireframe.md'],
+    },
+    {
+      key: 'paperless_count',
+      label: 'Paperless Transactions',
+      unit: 'receipts',
+      is_estimate: false,
+      documented_in: ['Group4_Wireframe.md', 'Group4_Act.4 (1).md'],
+    },
+  ],
+  pending_approval_note:
+    'Water saved is excluded from the implemented model until the group or adviser approves an explicit requirement, unit, source factor, and schema update.',
+};
+
 export interface EcoImpactSummary {
   scope: EcoScope;
   paperless_count: number;
   total_paper_saved: number;
   total_carbon_reduction: number;
   formula_note: string;
+  specification?: EcoImpactSpecification;
   ledger: EcoImpactLedgerRow[];
 }
 
@@ -217,10 +268,17 @@ export function calculateEcoMetrics(distinctLineCount: number): {
   paper_saved: number;
   carbon_reduction: number;
 } {
-  if (distinctLineCount <= 0) {
+  if (!Number.isInteger(distinctLineCount) || distinctLineCount <= 0) {
     return { paper_saved: 0, carbon_reduction: 0 };
   }
-  const paper_saved = Number((1.0 + distinctLineCount * 0.25).toFixed(2));
-  const carbon_reduction = Number((paper_saved * 3.5).toFixed(2));
+  const paper_saved = Number(
+    (
+      ECO_IMPACT_SPEC.base_receipt_sheets +
+      distinctLineCount * ECO_IMPACT_SPEC.sheets_per_distinct_line_item
+    ).toFixed(2)
+  );
+  const carbon_reduction = Number(
+    (paper_saved * ECO_IMPACT_SPEC.grams_co2e_per_sheet).toFixed(2)
+  );
   return { paper_saved, carbon_reduction };
 }

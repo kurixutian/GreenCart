@@ -142,7 +142,7 @@ export function AdminOverviewView({
             {(ecoSummary?.total_paper_saved ?? 0).toFixed(2)} sh
           </p>
           <p className="mt-1 text-[11px] text-brand-700">
-            ~{(ecoSummary?.total_carbon_reduction ?? 0).toFixed(2)} g CO₂e avoided
+            ~{(ecoSummary?.total_carbon_reduction ?? 0).toFixed(2)} g CO₂e avoided (est.)
           </p>
         </div>
       </div>

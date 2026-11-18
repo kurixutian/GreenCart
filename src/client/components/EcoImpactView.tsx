@@ -1,6 +1,11 @@
 import { CloudOff, FileCheck2, Info, Leaf, QrCode, ScrollText } from './Icons';
 import { formatCurrency } from '../utils/format';
-import type { AccountType, EcoImpactSummary, EcoScope } from '../../shared/types';
+import {
+  ECO_IMPACT_SPEC,
+  type AccountType,
+  type EcoImpactSummary,
+  type EcoScope,
+} from '../../shared/types';
 
 interface EcoImpactViewProps {
   summary: EcoImpactSummary | null;
@@ -17,6 +22,7 @@ export function EcoImpactView({
   onChangeScope,
   onInspectToken,
 }: EcoImpactViewProps) {
+  const spec = summary?.specification ?? ECO_IMPACT_SPEC;
   const paperSaved = summary?.total_paper_saved ?? 0;
   const nextMilestone = paperSaved < 10 ? 10 : paperSaved < 25 ? 25 : paperSaved < 50 ? 50 : 100;
   const progressPct = Math.min(100, Math.round((paperSaved / nextMilestone) * 100));
@@ -30,7 +36,7 @@ export function EcoImpactView({
           </div>
           <div>
             <h2 className="text-xl font-extrabold text-slate-900">Eco-Impact Dashboard</h2>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-600">
               Reconciled from persisted <span className="font-mono">eco_impact</span> and{' '}
               <span className="font-mono">digital_receipts</span> records.
             </p>
@@ -81,7 +87,7 @@ export function EcoImpactView({
           <p className="mt-3 font-mono text-3xl font-extrabold text-slate-900 tabular-nums">
             {summary ? summary.total_paper_saved.toFixed(2) : '0.00'}
           </p>
-          <p className="mt-1 text-xs text-slate-500">thermal receipt sheets avoided</p>
+          <p className="mt-1 text-xs text-slate-600">thermal receipt sheets estimated avoided</p>
         </div>
 
         <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-white to-emerald-50/70 p-6 shadow-sm">
@@ -94,7 +100,7 @@ export function EcoImpactView({
           <p className="mt-3 font-mono text-3xl font-extrabold text-slate-900 tabular-nums">
             {summary ? summary.total_carbon_reduction.toFixed(2) : '0.00'}
           </p>
-          <p className="mt-1 text-xs text-slate-500">grams CO₂e estimated avoided</p>
+          <p className="mt-1 text-xs text-slate-600">grams CO₂e estimated avoided</p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -107,7 +113,7 @@ export function EcoImpactView({
           <p className="mt-3 font-mono text-3xl font-extrabold text-slate-900 tabular-nums">
             {summary ? summary.paperless_count : 0}
           </p>
-          <p className="mt-1 text-xs text-slate-500">QR-backed digital receipts issued</p>
+          <p className="mt-1 text-xs text-slate-600">QR-backed digital receipts issued</p>
         </div>
       </div>
 
@@ -131,14 +137,23 @@ export function EcoImpactView({
 
       {/* Formula Disclosure Banner */}
       <div className="flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50/80 p-4 text-xs text-sky-900">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
-        <div>
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" />
+        <div className="space-y-1.5">
           <p className="font-semibold">Documented Estimation Methodology</p>
-          <p className="mt-0.5 text-sky-800">
-            {summary?.formula_note ??
-              'Estimated impact: 1.00 base receipt sheet + 0.25 sheets per distinct line item; 3.50 g CO2e avoided per thermal sheet saved.'}{' '}
-            Figures are project estimates derived from persisted database records, not laboratory emission measurements.
+          <p className="text-sky-900">
+            {summary?.formula_note ?? spec.formula_note} Figures are project estimates derived from
+            persisted database records, not laboratory emission measurements.
           </p>
+          <p className="text-[11px] text-sky-900">
+            <span className="font-semibold">Approved Metrics (Estimate &amp; Count Scope):</span>{' '}
+            {spec.metrics
+              .map(
+                (m) =>
+                  `${m.label} (${m.unit}, ${m.is_estimate ? 'Estimate' : 'Recorded Count'}) [${m.documented_in.join(', ')}]`
+              )
+              .join(' · ')}
+          </p>
+          <p className="text-[11px] font-medium text-sky-900">{spec.pending_approval_note}</p>
         </div>
       </div>
 
@@ -162,8 +177,8 @@ export function EcoImpactView({
                 <th className="px-4 py-3">Customer</th>
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3 text-right">Amount</th>
-                <th className="px-4 py-3 text-right">Paper Saved</th>
-                <th className="px-5 py-3 text-right">CO₂e Reduced</th>
+                <th className="px-4 py-3 text-right">Paper Saved (Est.)</th>
+                <th className="px-5 py-3 text-right">CO₂e Reduced (Est.)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -194,7 +209,7 @@ export function EcoImpactView({
                     <td className="px-4 py-3.5 text-xs font-medium text-slate-700">
                       {row.customer_name}
                     </td>
-                    <td className="px-4 py-3.5 text-xs text-slate-500">{row.transaction_date}</td>
+                    <td className="px-4 py-3.5 text-xs text-slate-600">{row.transaction_date}</td>
                     <td className="px-4 py-3.5 text-right font-mono text-xs font-semibold tabular-nums">
                       {formatCurrency(row.total_amount)}
                     </td>

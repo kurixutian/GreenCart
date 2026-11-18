@@ -9,6 +9,7 @@ import { openDatabase } from '../src/server/db.ts';
 import { signSessionToken, verifySessionToken } from '../src/server/crypto.ts';
 import { AppError, GreenCartService } from '../src/server/service.ts';
 import { createApiMiddleware } from '../src/server/apiPlugin.ts';
+import { ECO_IMPACT_SPEC, calculateEcoMetrics } from '../src/shared/types.ts';
 
 interface MockResponseResult {
   statusCode: number;
@@ -682,5 +683,59 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
 
     expect(() => service.login('maria_santos', 'customer123')).toThrowError(/Invalid username/);
     expect(service.login('maria_santos', 'newpassword99').full_name).toBe('Maria Santos-Reyes');
+  });
+
+  it('verifies Phase 5 Eco-Impact specification, boundary calculations, seed reconciliation, and pending-metric exclusion', () => {
+    const admin = service.login('admin_qcu', 'admin123');
+
+    // Boundary and rounding tests against ECO_IMPACT_SPEC constants
+    expect(calculateEcoMetrics(0)).toEqual({ paper_saved: 0, carbon_reduction: 0 });
+    expect(calculateEcoMetrics(-2)).toEqual({ paper_saved: 0, carbon_reduction: 0 });
+    expect(calculateEcoMetrics(1.5)).toEqual({ paper_saved: 0, carbon_reduction: 0 });
+    expect(calculateEcoMetrics(1)).toEqual({ paper_saved: 1.25, carbon_reduction: 4.38 });
+    expect(calculateEcoMetrics(2)).toEqual({ paper_saved: 1.5, carbon_reduction: 5.25 });
+    expect(calculateEcoMetrics(3)).toEqual({ paper_saved: 1.75, carbon_reduction: 6.13 });
+
+    // Seeded eco_impact rows reconcile 100% with calculateEcoMetrics(distinctLineCount)
+    const seededRows = db
+      .prepare(
+        `SELECT ei.transaction_id,
+                CAST(ei.paper_saved AS REAL) AS paper_saved,
+                CAST(ei.carbon_reduction AS REAL) AS carbon_reduction,
+                COUNT(td.detail_id) AS distinct_lines
+         FROM eco_impact ei
+         INNER JOIN transaction_details td ON td.transaction_id = ei.transaction_id
+         GROUP BY ei.transaction_id
+         ORDER BY ei.transaction_id ASC`
+      )
+      .all() as Array<{
+      transaction_id: number;
+      paper_saved: number;
+      carbon_reduction: number;
+      distinct_lines: number;
+    }>;
+
+    expect(seededRows.length).toBeGreaterThanOrEqual(3);
+    for (const row of seededRows) {
+      const expected = calculateEcoMetrics(row.distinct_lines);
+      expect(row.paper_saved).toBe(expected.paper_saved);
+      expect(row.carbon_reduction).toBe(expected.carbon_reduction);
+    }
+
+    // Schema guard: eco_impact does not invent unapproved water columns
+    const ecoColumns = (
+      db.prepare('PRAGMA table_info(eco_impact)').all() as Array<{ name: string }>
+    ).map((c) => c.name);
+    expect(ecoColumns).toEqual(['impact_id', 'transaction_id', 'paper_saved', 'carbon_reduction']);
+
+    // Summary exposes traceable specification metadata & estimate flags
+    const summary = service.getEcoImpactSummary(admin, 'store');
+    expect(summary.specification).toEqual(ECO_IMPACT_SPEC);
+    expect(summary.specification?.metrics.map((m) => m.key)).toEqual([
+      'paper_saved',
+      'carbon_reduction',
+      'paperless_count',
+    ]);
+    expect(summary.specification?.pending_approval_note).toMatch(/Water saved is excluded/i);
   });
 });

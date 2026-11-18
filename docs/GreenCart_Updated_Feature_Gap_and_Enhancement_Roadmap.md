@@ -522,15 +522,15 @@ Deliverable: better record retrieval and basic account controls, without duplica
 Goal: ensure sustainability metrics are accurate and defensible.
 
 Tasks:
-- Keep paper saved and carbon reduction as the documented metrics.
-- Ask the group/adviser for the exact source if water saved is required.
-- Approve the metric, unit, formula and assumptions before schema/UI changes.
-- If approved, update ERD, schema, migration, seed data, calculation code, receipts and dashboard.
-- Add calculation tests and label estimated values clearly.
+- [x] Kept `paper_saved` (sheets) and `carbon_reduction` (g CO₂e) plus `paperless_count` as the documented metrics matching Activity 3, Activity 4, and the Wireframe.
+- [x] Verified against `Group4_Act.1.md`, `Group4_Act.3 (1).md`, `Group4_Act.4 (1).md`, and `Group4_Wireframe.md`: no `water_saved` metric, unit, or conversion factor exists; left `water_saved` **pending group/adviser approval** and excluded from schema/UI (`eco_impact` untouched).
+- [x] Centralized exact constants, units, assumptions, and documented provenance into `ECO_IMPACT_SPEC` (`src/shared/types.ts`) and returned structured `specification` metadata via `getEcoImpactSummary`.
+- [x] Standardized `(Estimate)` / `(Est.)` labeling across `EcoImpactView`, `ReceiptView`, `HistoryView`, `AdminOverviewView`, `CatalogView`, and `PosView`.
+- [x] Added calculation, seed reconciliation, and schema boundary tests (`tests/greencart.test.ts` and `tests/e2e.spec.ts`).
 
 Deliverable: approved Eco-Impact model and transparent methodology.
 
-**Gate:** every displayed metric traces to a project requirement and documented formula.
+**Gate:** every displayed metric traces to a project requirement and documented formula. *(Verified: `vitest` + Playwright/Axe).*
 
 ### Phase 6 — Full QA and release readiness
 

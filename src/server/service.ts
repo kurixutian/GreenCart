@@ -8,6 +8,7 @@ import {
   verifyPassword,
 } from './crypto.ts';
 import {
+  ECO_IMPACT_SPEC,
   calculateEcoMetrics,
   type AccountRow,
   type AccountType,
@@ -1220,8 +1221,8 @@ export class GreenCartService {
       paperless_count: Number(agg.paperless_count),
       total_paper_saved: Number(agg.total_paper_saved),
       total_carbon_reduction: Number(agg.total_carbon_reduction),
-      formula_note:
-        'Estimated impact: 1.00 base receipt sheet + 0.25 sheets per distinct line item; 3.50 g CO2e avoided per thermal sheet saved.',
+      formula_note: ECO_IMPACT_SPEC.formula_note,
+      specification: ECO_IMPACT_SPEC,
       ledger,
     };
   }

@@ -301,20 +301,23 @@ export function ReceiptView({
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   <div className="rounded-xl bg-white p-3 shadow-xs">
-                    <span className="block text-[11px] text-slate-500">Paper Saved</span>
+                    <span className="block text-[11px] text-slate-600">Paper Saved (Est.)</span>
                     <span className="mt-0.5 block font-mono text-base font-extrabold text-brand-700 tabular-nums">
                       {activeReceipt.paper_saved.toFixed(2)}
                     </span>
-                    <span className="text-[10px] text-slate-500">sheets</span>
+                    <span className="text-[10px] text-slate-600">sheets</span>
                   </div>
                   <div className="rounded-xl bg-white p-3 shadow-xs">
-                    <span className="block text-[11px] text-slate-500">CO₂e Reduced</span>
+                    <span className="block text-[11px] text-slate-600">CO₂e Reduced (Est.)</span>
                     <span className="mt-0.5 block font-mono text-base font-extrabold text-emerald-700 tabular-nums">
                       {activeReceipt.carbon_reduction.toFixed(2)}
                     </span>
-                    <span className="text-[10px] text-slate-500">grams CO₂e</span>
+                    <span className="text-[10px] text-slate-600">grams CO₂e</span>
                   </div>
                 </div>
+                <p className="mt-2.5 text-[11px] text-brand-800">
+                  Estimate: 1.00 base sheet + 0.25/line · 3.50 g CO₂e/sheet.
+                </p>
               </div>
             </div>
           </div>

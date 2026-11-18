@@ -87,7 +87,7 @@ export function HistoryView({ history, onViewReceipt }: HistoryViewProps) {
                 </div>
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
                   <span className="rounded-full bg-brand-50 px-2.5 py-1 font-mono text-[11px] font-medium text-brand-700">
-                    {row.paper_saved.toFixed(2)} sh · {row.carbon_reduction.toFixed(2)} g CO₂e
+                    {row.paper_saved.toFixed(2)} sh · {row.carbon_reduction.toFixed(2)} g CO₂e (est.)
                   </span>
                   <button
                     type="button"

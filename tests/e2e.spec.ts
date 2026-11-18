@@ -106,6 +106,10 @@ test.describe('GreenCart Browser E2E, Mobile P0 & Accessibility', () => {
     await page.locator('nav:visible').getByRole('button', { name: /Eco-Impact/i }).click();
     await expect(page.getByRole('heading', { name: 'Eco-Impact Dashboard' })).toBeVisible();
     await expect(page.getByText(/Cumulative Paper-Saving Milestone/i)).toBeVisible();
+    await expect(page.getByText(/Paper Saved \(Estimate\)/i)).toBeVisible();
+    await expect(page.getByText(/Carbon Reduction \(Estimate\)/i)).toBeVisible();
+    await expect(page.getByText(/Documented Estimation Methodology/i)).toBeVisible();
+    await expect(page.getByText(/Water saved is excluded/i)).toBeVisible();
     const ecoAxe = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa'])
       .analyze();

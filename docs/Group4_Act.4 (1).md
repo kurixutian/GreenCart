@@ -110,4 +110,13 @@ Preserves the canonical seven entities (`Account`, `Product`, `Inventory`, `Tran
 - `inventory.reorder_level` (`INTEGER NOT NULL DEFAULT 10 CHECK (reorder_level >= 1)`, configurable per-product low-stock threshold)
 - `inventory_adjustments` audit entity (`adjustment_id`, `product_id` FK, `account_id` FK actor, `delta`, `previous_qty`, `new_qty`, `reason`, `adjusted_at`, indexed via `idx_inventory_adjustments_product_date`)
 
+### Eco-Impact Specification & Methodology Decision (Phase 5)
+
+Audited against `Group4_Act.3 (1).md`, `Group4_Act.4 (1).md`, and `Group4_Wireframe.md`:
+- **Approved Implemented Metrics:**
+  - `paper_saved` (`NUMERIC`, unit: `sheets`, **Estimate**): `1.00 + 0.25 * distinct_line_items` (base receipt header/footer sheet + per-item line estimate).
+  - `carbon_reduction` (`NUMERIC`, unit: `g CO2e`, **Estimate**): `paper_saved * 3.50` (estimated thermal paper lifecycle factor per sheet avoided).
+  - `paperless_count` (derived integer count from `digital_receipts`, factual transaction count).
+- **Deferred / Pending Approval Metric (`water_saved`):** Neither Activity 3, Activity 4, nor the Wireframe establishes a `water_saved` field, unit, or conversion factor. Therefore, `eco_impact` strictly retains `paper_saved` and `carbon_reduction`; `water_saved` stays excluded unless formally approved by the group/adviser with a documented source formula.
+
 
