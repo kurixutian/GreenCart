@@ -1,8 +1,10 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { Boxes, Edit3, Plus, Search, X } from './Icons';
 import { api } from '../api';
 import { formatCurrency, getStockBadgeClasses } from '../utils/format';
-import type { CatalogItem, StockStatus } from '../../shared/types';
+import { PRODUCT_CATEGORIES, type CatalogItem, type StockStatus } from '../../shared/types';
+
+const FALLBACK_IMAGE = '/images/products/placeholder.svg';
 
 interface InventoryViewProps {
   catalog: CatalogItem[];
@@ -19,10 +21,14 @@ const STATUS_PRIORITY: Record<StockStatus, number> = {
 export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
   const [nameInput, setNameInput] = useState('');
   const [descInput, setDescInput] = useState('');
+  const [categoryInput, setCategoryInput] = useState<string>(PRODUCT_CATEGORIES[3]);
+  const [imageUrlInput, setImageUrlInput] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [priceInput, setPriceInput] = useState('');
   const [qtyInput, setQtyInput] = useState('');
   const [saving, setSaving] = useState(false);
@@ -39,9 +45,11 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
       const matchesSearch =
         !q ||
         item.product_name.toLowerCase().includes(q) ||
-        item.description.toLowerCase().includes(q);
+        item.description.toLowerCase().includes(q) ||
+        item.category.toLowerCase().includes(q);
       const matchesStatus = statusFilter === 'ALL' || item.stock_status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesCategory = categoryFilter === 'ALL' || item.category === categoryFilter;
+      return matchesSearch && matchesStatus && matchesCategory;
     })
     .sort((a, b) => {
       const prioDiff = STATUS_PRIORITY[a.stock_status] - STATUS_PRIORITY[b.stock_status];
@@ -56,6 +64,8 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
     setEditingItem(null);
     setNameInput('');
     setDescInput('');
+    setCategoryInput(PRODUCT_CATEGORIES[3]);
+    setImageUrlInput('');
     setPriceInput('');
     setQtyInput('15');
     setModalOpen(true);
@@ -65,9 +75,32 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
     setEditingItem(item);
     setNameInput(item.product_name);
     setDescInput(item.description);
+    setCategoryInput(item.category);
+    setImageUrlInput(item.image_url || '');
     setPriceInput(String(item.price));
     setQtyInput(String(item.quantity));
     setModalOpen(true);
+  }
+
+  async function handleImageUpload(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      onNotify('Image file must be 2 MB or smaller.', 'error');
+      e.target.value = '';
+      return;
+    }
+    setUploadingImage(true);
+    try {
+      const { image_url } = await api.uploadProductImage(file);
+      setImageUrlInput(image_url);
+      onNotify('Product image uploaded.');
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : 'Image upload failed.', 'error');
+    } finally {
+      setUploadingImage(false);
+      e.target.value = '';
+    }
   }
 
   async function handleAdjust(productId: number, delta: number) {
@@ -106,6 +139,8 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
         description: item.description,
         price: nextPrice,
         quantity: nextQty,
+        category: item.category,
+        image_url: item.image_url,
       });
       await onRefresh();
       onNotify(`Updated ${field} for "${item.product_name}".`);
@@ -123,6 +158,8 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
         description: descInput,
         price: Number(priceInput),
         quantity: Number(qtyInput),
+        category: categoryInput,
+        image_url: imageUrlInput.trim() || null,
       };
       if (editingItem) {
         await api.updateProduct(editingItem.product_id, payload);
@@ -205,7 +242,20 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
               </button>
             )}
           </div>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <select
+              aria-label="Filter inventory by category"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="min-h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-brand-500"
+            >
+              <option value="ALL">All Categories</option>
+              {PRODUCT_CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
             {['ALL', 'In Stock', 'Low Stock', 'Out of Stock'].map((status) => (
               <button
                 key={status}
@@ -228,11 +278,22 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
           {filtered.map((item) => (
             <div key={item.product_id} className="space-y-3 p-4">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-bold text-slate-900">{item.product_name}</p>
-                  <p className="mt-0.5 font-mono text-xs font-semibold text-brand-700 tabular-nums">
-                    {formatCurrency(item.price)} · Qty {item.quantity}
-                  </p>
+                <div className="flex items-start gap-3">
+                  <img
+                    src={item.image_url || FALLBACK_IMAGE}
+                    alt={item.product_name}
+                    onError={(e) => {
+                      e.currentTarget.src = FALLBACK_IMAGE;
+                    }}
+                    className="h-12 w-12 shrink-0 rounded-xl border border-slate-200 bg-brand-50 object-cover"
+                  />
+                  <div>
+                    <p className="font-bold text-slate-900">{item.product_name}</p>
+                    <p className="mt-0.5 text-[11px] font-medium text-slate-600">{item.category}</p>
+                    <p className="mt-0.5 font-mono text-xs font-semibold text-brand-700 tabular-nums">
+                      {formatCurrency(item.price)} · Qty {item.quantity}
+                    </p>
+                  </div>
                 </div>
                 <span
                   className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${getStockBadgeClasses(
@@ -302,10 +363,22 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                 return (
                   <tr key={item.product_id} className="hover:bg-slate-50/70">
                     <td className="px-5 py-3.5">
-                      <p className="font-semibold text-slate-900">{item.product_name}</p>
-                      <p className="mt-0.5 line-clamp-1 max-w-md text-xs text-slate-500">
-                        {item.description}
-                      </p>
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={item.image_url || FALLBACK_IMAGE}
+                          alt={item.product_name}
+                          onError={(e) => {
+                            e.currentTarget.src = FALLBACK_IMAGE;
+                          }}
+                          className="h-10 w-10 shrink-0 rounded-lg border border-slate-200 bg-brand-50 object-cover"
+                        />
+                        <div>
+                          <p className="font-semibold text-slate-900">{item.product_name}</p>
+                          <p className="mt-0.5 text-[11px] font-medium text-slate-600">
+                            {item.category}
+                          </p>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3.5 text-right font-mono font-semibold text-slate-900 tabular-nums">
                       {editingPrice ? (
@@ -507,6 +580,64 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                     onChange={(e) => setQtyInput(e.target.value)}
                     className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                   />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="product-category-select"
+                  className="block text-xs font-semibold uppercase tracking-wider text-slate-600"
+                >
+                  Category
+                </label>
+                <select
+                  id="product-category-select"
+                  value={categoryInput}
+                  onChange={(e) => setCategoryInput(e.target.value)}
+                  className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                >
+                  {PRODUCT_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
+                <label
+                  htmlFor="product-image-upload"
+                  className="block text-xs font-semibold uppercase tracking-wider text-slate-600"
+                >
+                  Product Image (PNG, JPEG, WebP, SVG · Max 2MB)
+                </label>
+                <div className="flex items-center gap-3">
+                  <img
+                    src={imageUrlInput.trim() || FALLBACK_IMAGE}
+                    alt={nameInput || 'Product preview'}
+                    onError={(e) => {
+                      e.currentTarget.src = FALLBACK_IMAGE;
+                    }}
+                    className="h-14 w-14 shrink-0 rounded-xl border border-slate-200 bg-white object-cover"
+                  />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <input
+                      id="product-image-upload"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      disabled={uploadingImage}
+                      onChange={(e) => void handleImageUpload(e)}
+                      className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-brand-700"
+                    />
+                    <input
+                      type="text"
+                      aria-label="Image URL"
+                      value={imageUrlInput}
+                      onChange={(e) => setImageUrlInput(e.target.value)}
+                      placeholder="/images/products/product-1.svg or https://..."
+                      className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 font-mono text-xs outline-none focus:border-brand-500"
+                    />
+                  </div>
                 </div>
               </div>
 

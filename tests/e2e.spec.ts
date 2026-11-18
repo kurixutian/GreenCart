@@ -40,12 +40,20 @@ test.describe('GreenCart Browser E2E, Mobile P0 & Accessibility', () => {
     await page.getByLabel('Sort products').selectOption('name-desc');
     expect(page.url()).toContain('sort=name-desc');
 
+    // Phase 1: Category filtering & product images
+    await expect(page.locator('article img[alt="Bamboo Toothbrush 4-Pack"]')).toBeVisible();
+    await page.getByRole('button', { name: 'Drinkware', exact: true }).click();
+    expect(page.url()).toContain('category=Drinkware');
+    await expect(page.getByText('Insulated Stainless Tumbler 500ml')).toBeVisible();
+    await page.getByRole('button', { name: 'All Categories', exact: true }).click();
+
     // P1.3: Open Product Detail modal and close with Escape
     await page
       .getByRole('button', { name: /View details for Recycled Kraft Spiral Notebook/i })
       .click();
     const modal = page.getByRole('dialog');
     await expect(modal).toBeVisible();
+    await expect(modal.locator('img[alt="Recycled Kraft Spiral Notebook"]')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(modal).toBeHidden();
 
@@ -182,5 +190,11 @@ test.describe('GreenCart Browser E2E, Mobile P0 & Accessibility', () => {
       const firstRowText = await page.locator('tbody tr').first().innerText();
       expect(firstRowText).toContain('Out of Stock');
     }
+
+    // Phase 1: Verify Admin Add Product modal includes Category & Image Upload
+    await page.getByRole('button', { name: /Add New Product/i }).click();
+    await expect(page.locator('#product-category-select')).toBeVisible();
+    await expect(page.locator('#product-image-upload')).toBeVisible();
+    await page.getByRole('button', { name: /Close product form/i }).click();
   });
 });

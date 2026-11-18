@@ -191,7 +191,8 @@ export function createApiMiddleware(
         requireAuth();
         const search = url.searchParams.get('search') || '';
         const status = url.searchParams.get('status') || 'ALL';
-        const items = service.listCatalog(search, status);
+        const category = url.searchParams.get('category') || 'ALL';
+        const items = service.listCatalog(search, status, category);
         sendJson(res, 200, { items });
         return;
       }
@@ -204,6 +205,24 @@ export function createApiMiddleware(
         return;
       }
 
+      // POST /api/uploads/product-image (admin only)
+      if (method === 'POST' && pathname === '/api/uploads/product-image') {
+        const actor = requireAuth();
+        requireCsrf();
+        const body = await readJsonBody<{
+          filename?: string;
+          mimeType?: string;
+          base64Data?: string;
+        }>(req);
+        const uploaded = service.saveProductImageUpload(actor.account_type, {
+          filename: body.filename || 'upload.png',
+          mimeType: body.mimeType || '',
+          base64Data: body.base64Data || '',
+        });
+        sendJson(res, 201, uploaded);
+        return;
+      }
+
       // POST /api/products (admin only)
       if (method === 'POST' && pathname === '/api/products') {
         const actor = requireAuth();
@@ -213,12 +232,16 @@ export function createApiMiddleware(
           description?: string;
           price?: number;
           quantity?: number;
+          category?: string;
+          image_url?: string | null;
         }>(req);
         const item = service.upsertProduct(actor.account_type, {
           product_name: body.product_name || '',
           description: body.description || '',
           price: Number(body.price),
           quantity: Number(body.quantity),
+          category: body.category,
+          image_url: body.image_url,
         });
         sendJson(res, 201, { item });
         return;
@@ -235,6 +258,8 @@ export function createApiMiddleware(
           description?: string;
           price?: number;
           quantity?: number;
+          category?: string;
+          image_url?: string | null;
         }>(req);
         const item = service.upsertProduct(actor.account_type, {
           product_id: productId,
@@ -242,6 +267,8 @@ export function createApiMiddleware(
           description: body.description || '',
           price: Number(body.price),
           quantity: Number(body.quantity),
+          category: body.category,
+          image_url: body.image_url,
         });
         sendJson(res, 200, { item });
         return;

@@ -17,8 +17,19 @@ import {
   mutateCart,
   type CartEntry,
 } from '../utils/format';
-import { calculateEcoMetrics, type CatalogItem, type DigitalReceiptView } from '../../shared/types';
+import {
+  calculateEcoMetrics,
+  PRODUCT_CATEGORIES,
+  type CatalogItem,
+  type DigitalReceiptView,
+} from '../../shared/types';
 import { api } from '../api';
+
+const FALLBACK_PRODUCT_IMAGE = '/images/products/placeholder.svg';
+
+function getInitialCategory(): string {
+  return new URLSearchParams(window.location.search).get('category') || 'ALL';
+}
 
 type SortOption =
   | 'featured'
@@ -69,12 +80,13 @@ export function CatalogView({
 }: CatalogViewProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>(getInitialCategory);
   const [sortBy, setSortBy] = useState<SortOption>(getInitialSort);
   const [selectedProduct, setSelectedProduct] = useState<CatalogItem | null>(null);
   const [confirmingCheckout, setConfirmingCheckout] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Sync sort param in URL (P1.3)
+  // Sync sort and category params in URL (P1.3 & Phase 1)
   useEffect(() => {
     const url = new URL(window.location.href);
     if (sortBy === 'featured') {
@@ -82,8 +94,13 @@ export function CatalogView({
     } else {
       url.searchParams.set('sort', sortBy);
     }
+    if (categoryFilter === 'ALL') {
+      url.searchParams.delete('category');
+    } else {
+      url.searchParams.set('category', categoryFilter);
+    }
     window.history.replaceState({}, '', `${url.pathname}${url.search}`);
-  }, [sortBy]);
+  }, [sortBy, categoryFilter]);
 
   // Escape closes product detail modal (P1.3)
   useEffect(() => {
@@ -103,9 +120,11 @@ export function CatalogView({
       const matchesSearch =
         !q ||
         item.product_name.toLowerCase().includes(q) ||
-        item.description.toLowerCase().includes(q);
+        item.description.toLowerCase().includes(q) ||
+        item.category.toLowerCase().includes(q);
       const matchesStatus = statusFilter === 'ALL' || item.stock_status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesCategory = categoryFilter === 'ALL' || item.category === categoryFilter;
+      return matchesSearch && matchesStatus && matchesCategory;
     })
     .sort((a, b) => {
       switch (sortBy) {
@@ -378,6 +397,23 @@ export function CatalogView({
             </div>
 
             <div className="flex flex-wrap gap-1.5">
+              {['ALL', ...PRODUCT_CATEGORIES].map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setCategoryFilter(cat)}
+                  className={`min-h-11 rounded-full px-3.5 py-2 text-xs font-semibold transition ${
+                    categoryFilter === cat
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-brand-50 text-brand-800 hover:bg-brand-100'
+                  }`}
+                >
+                  {cat === 'ALL' ? 'All Categories' : cat}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
               {['ALL', 'In Stock', 'Low Stock', 'Out of Stock'].map((status) => (
                 <button
                   key={status}
@@ -421,9 +457,24 @@ export function CatalogView({
                     className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md sm:p-5"
                   >
                     <div>
-                      <div className="flex flex-wrap items-start justify-between gap-1.5">
-                        <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-600 sm:h-10 sm:w-10">
-                          <Leaf className="h-4 w-4 sm:h-5 sm:w-5" />
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProduct(item)}
+                        className="relative mb-3 block w-full overflow-hidden rounded-xl bg-brand-50/70"
+                      >
+                        <img
+                          src={item.image_url || FALLBACK_PRODUCT_IMAGE}
+                          alt={item.product_name}
+                          loading="lazy"
+                          onError={(e) => {
+                            e.currentTarget.src = FALLBACK_PRODUCT_IMAGE;
+                          }}
+                          className="aspect-[16/11] w-full object-cover transition duration-200 hover:scale-[1.03]"
+                        />
+                      </button>
+                      <div className="flex flex-wrap items-center justify-between gap-1.5">
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                          {item.category}
                         </span>
                         <span
                           className={`rounded-full px-2 py-0.5 text-[10px] font-semibold sm:text-[11px] ${getStockBadgeClasses(
@@ -502,13 +553,18 @@ export function CatalogView({
         >
           <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${getStockBadgeClasses(
-                  selectedProduct.stock_status
-                )}`}
-              >
-                {selectedProduct.stock_status} · {selectedProduct.quantity} left
-              </span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                  {selectedProduct.category}
+                </span>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${getStockBadgeClasses(
+                    selectedProduct.stock_status
+                  )}`}
+                >
+                  {selectedProduct.stock_status} · {selectedProduct.quantity} left
+                </span>
+              </div>
               <button
                 type="button"
                 aria-label="Close product details"
@@ -518,7 +574,15 @@ export function CatalogView({
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <h3 id="product-modal-title" className="mt-3 text-xl font-extrabold text-slate-900">
+            <img
+              src={selectedProduct.image_url || FALLBACK_PRODUCT_IMAGE}
+              alt={selectedProduct.product_name}
+              onError={(e) => {
+                e.currentTarget.src = FALLBACK_PRODUCT_IMAGE;
+              }}
+              className="mt-3 aspect-[16/10] w-full rounded-2xl border border-slate-100 bg-brand-50/70 object-cover"
+            />
+            <h3 id="product-modal-title" className="mt-4 text-xl font-extrabold text-slate-900">
               {selectedProduct.product_name}
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">

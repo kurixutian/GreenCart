@@ -455,20 +455,20 @@ Deliverable: current audit and roadmap documentation.
 
 **Gate:** a new developer can read the docs and understand what exists, what is missing, and what requires approval.
 
-### Phase 1 — Product data expansion (approval required)
+### Phase 1 — Product data expansion (Implemented)
 
 Goal: make the catalog more visual and easier to browse.
 
 Tasks:
-- Decide single image vs multi-image gallery.
-- Decide category field vs Category entity.
-- Update ERD and migration before feature UI.
-- Add safe image reference/upload workflow.
-- Add category assignment and filters.
-- Add fallback image and responsive image handling.
-- Add tests and migration/backfill policy.
+- [x] Single primary image (`products.image_url`) + curated botanical illustrations (`public/images/products/`).
+- [x] Fixed category attribute (`products.category`) with `idx_products_category` index.
+- [x] Updated ERD amendment (`Group4_Act.4 (1).md`), `db/schema.sql`, `db/migrations/001_phase1_product_images_and_categories.sql`, and automatic backfill in `src/server/db.ts`.
+- [x] Added admin image upload endpoint (`POST /api/uploads/product-image`) with MIME, 2MB limit, and safe SVG/URL validation.
+- [x] Added category assignment in `InventoryView` and URL-persisted `?category=` filtering in `CatalogView` + POS category filters.
+- [x] Added fallback `/images/products/placeholder.svg` and responsive `alt`-labeled images.
+- [x] Added Vitest and Playwright E2E + Axe checks.
 
-Deliverable: product images and categories, if approved.
+Deliverable: product images and categories.
 
 **Gate:** current products still load; image/category data is valid; admin and customer views agree.
 

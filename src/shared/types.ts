@@ -17,11 +17,23 @@ export interface SafeUser {
   full_name: string;
 }
 
+export const PRODUCT_CATEGORIES = [
+  'Personal Care',
+  'Bags & Totes',
+  'Drinkware',
+  'Kitchen & Home',
+  'Stationery',
+] as const;
+
+export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];
+
 export interface ProductRow {
   product_id: number;
   product_name: string;
   description: string;
   price: number;
+  category: string;
+  image_url: string | null;
 }
 
 export interface InventoryRow {
@@ -36,6 +48,8 @@ export interface CatalogItem {
   product_name: string;
   description: string;
   price: number;
+  category: string;
+  image_url: string | null;
   inventory_id: number;
   quantity: number;
   stock_status: StockStatus;

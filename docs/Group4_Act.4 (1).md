@@ -98,3 +98,12 @@ Lim, 4.2 Manzon, 4.3 Marcial, 4.4 Mariano, 4.5 Moyalde
 Date Submitted: WK 5 – 09/11/26
 Submitted to: Mr. Benjamin D. Molinar                                      Score :
 
+---
+
+## ERD v2 Amendment (Approved Phase 1 Product Expansion)
+
+Preserves the canonical seven entities (`Account`, `Product`, `Inventory`, `Transaction`, `Transaction_Detail`, `Digital_Receipt`, `Eco_Impact`) and extends `Product` via `db/migrations/001_phase1_product_images_and_categories.sql`:
+- `category` (`TEXT NOT NULL DEFAULT 'Kitchen & Home'`, indexed via `idx_products_category`)
+- `image_url` (`TEXT`, nullable relative asset/upload path or HTTP(S) URL with client fallback)
+
+

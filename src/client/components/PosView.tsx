@@ -19,6 +19,7 @@ import {
 } from '../utils/format';
 import {
   calculateEcoMetrics,
+  PRODUCT_CATEGORIES,
   type CatalogItem,
   type DigitalReceiptView,
   type SafeUser,
@@ -39,6 +40,7 @@ export function PosView({
 }: PosViewProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'In Stock' | 'Low Stock'>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [posCart, setPosCart] = useState<CartEntry[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number>(0);
   const [mobileRegisterOpen, setMobileRegisterOpen] = useState(false);
@@ -78,9 +80,11 @@ export function PosView({
       !q ||
       p.product_name.toLowerCase().includes(q) ||
       p.description.toLowerCase().includes(q) ||
+      p.category.toLowerCase().includes(q) ||
       String(p.product_id) === q;
     const matchesStatus = statusFilter === 'ALL' || p.stock_status === statusFilter;
-    return matchesQuery && matchesStatus;
+    const matchesCategory = categoryFilter === 'ALL' || p.category === categoryFilter;
+    return matchesQuery && matchesStatus && matchesCategory;
   });
 
   function getPosQty(productId: number): number {
@@ -317,7 +321,20 @@ export function PosView({
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <select
+                aria-label="Filter POS by category"
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="min-h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-brand-500"
+              >
+                <option value="ALL">All Categories</option>
+                {PRODUCT_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
               {(['ALL', 'In Stock', 'Low Stock'] as const).map((status) => (
                 <button
                   key={status}
@@ -349,7 +366,12 @@ export function PosView({
                   className="flex min-h-24 flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-xs transition hover:border-brand-400 hover:bg-brand-50/30 disabled:cursor-not-allowed disabled:opacity-55"
                 >
                   <div className="flex w-full items-start justify-between gap-2">
-                    <span className="font-semibold text-slate-900">{item.product_name}</span>
+                    <div>
+                      <span className="font-semibold text-slate-900">{item.product_name}</span>
+                      <span className="mt-0.5 block text-[11px] font-medium text-slate-600">
+                        {item.category}
+                      </span>
+                    </div>
                     <span
                       className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${getStockBadgeClasses(
                         item.stock_status

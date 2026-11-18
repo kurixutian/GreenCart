@@ -1,3 +1,6 @@
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import {
   generateOpaqueReceiptToken,
@@ -147,7 +150,7 @@ export class GreenCartService {
       .all() as unknown as SafeUser[];
   }
 
-  listCatalog(search = '', statusFilter = 'ALL'): CatalogItem[] {
+  listCatalog(search = '', statusFilter = 'ALL', categoryFilter = 'ALL'): CatalogItem[] {
     const query = search.trim().toLowerCase();
     const conditions: string[] = [];
     const params: string[] = [];
@@ -162,6 +165,11 @@ export class GreenCartService {
       params.push(statusFilter);
     }
 
+    if (categoryFilter && categoryFilter !== 'ALL') {
+      conditions.push('p.category = ?');
+      params.push(categoryFilter);
+    }
+
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     return this.db
@@ -171,6 +179,8 @@ export class GreenCartService {
            p.product_name,
            p.description,
            CAST(p.price AS REAL) AS price,
+           p.category,
+           p.image_url,
            i.inventory_id,
            i.quantity,
            i.stock_status
@@ -182,6 +192,67 @@ export class GreenCartService {
       .all(...params) as unknown as CatalogItem[];
   }
 
+  private normalizeImageUrl(raw?: string | null): string | null {
+    if (raw === undefined || raw === null) return null;
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    if (
+      trimmed.startsWith('/images/') ||
+      trimmed.startsWith('/uploads/') ||
+      trimmed.startsWith('https://') ||
+      trimmed.startsWith('http://')
+    ) {
+      return trimmed;
+    }
+    throw new AppError(
+      400,
+      'Image URL must be a relative /images/ or /uploads/ path or an HTTP(S) URL.'
+    );
+  }
+
+  saveProductImageUpload(
+    actorRole: AccountType,
+    input: { filename: string; mimeType: string; base64Data: string }
+  ): { image_url: string } {
+    if (actorRole !== 'admin') {
+      throw new AppError(403, 'Only administrators can upload product images.');
+    }
+
+    const mimeToExt: Record<string, string> = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/webp': 'webp',
+      'image/svg+xml': 'svg',
+    };
+    const ext = mimeToExt[input.mimeType.toLowerCase()];
+    if (!ext) {
+      throw new AppError(400, 'Unsupported image format. Use PNG, JPEG, WebP, or SVG.');
+    }
+
+    const cleanB64 = input.base64Data.replace(/^data:[^;]+;base64,/, '').trim();
+    if (!cleanB64) {
+      throw new AppError(400, 'Empty image upload payload.');
+    }
+
+    const buffer = Buffer.from(cleanB64, 'base64');
+    if (buffer.length === 0 || buffer.length > 2 * 1024 * 1024) {
+      throw new AppError(400, 'Image file size must be between 1 byte and 2 MB.');
+    }
+
+    if (ext === 'svg') {
+      const text = buffer.toString('utf8');
+      if (!text.includes('<svg') || /<script/i.test(text)) {
+        throw new AppError(400, 'Invalid or unsafe SVG content.');
+      }
+    }
+
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'products');
+    fs.mkdirSync(uploadDir, { recursive: true });
+    const fileName = `${crypto.randomUUID()}.${ext}`;
+    fs.writeFileSync(path.join(uploadDir, fileName), buffer);
+    return { image_url: `/uploads/products/${fileName}` };
+  }
+
   upsertProduct(
     actorRole: AccountType,
     input: {
@@ -190,6 +261,8 @@ export class GreenCartService {
       description: string;
       price: number;
       quantity: number;
+      category?: string;
+      image_url?: string | null;
     }
   ): CatalogItem {
     if (actorRole !== 'admin') {
@@ -198,6 +271,8 @@ export class GreenCartService {
 
     const productName = input.product_name.trim();
     const description = input.description.trim();
+    const category = (input.category ?? 'Kitchen & Home').trim();
+    const imageUrl = this.normalizeImageUrl(input.image_url);
     const price = Number(input.price);
     const quantity = Number(input.quantity);
 
@@ -206,6 +281,9 @@ export class GreenCartService {
     }
     if (description.length < 4 || description.length > 400) {
       throw new AppError(400, 'Description must be between 4 and 400 characters.');
+    }
+    if (category.length < 2 || category.length > 60) {
+      throw new AppError(400, 'Category must be between 2 and 60 characters.');
     }
     if (!Number.isFinite(price) || price < 0) {
       throw new AppError(400, 'Price must be a non-negative number.');
@@ -223,25 +301,30 @@ export class GreenCartService {
 
       if (targetProductId !== undefined) {
         const existing = this.db
-          .prepare('SELECT product_id FROM products WHERE product_id = ?')
-          .get(targetProductId) as { product_id: number } | undefined;
+          .prepare('SELECT product_id, image_url FROM products WHERE product_id = ?')
+          .get(targetProductId) as { product_id: number; image_url: string | null } | undefined;
         if (!existing) {
           throw new AppError(404, 'Product not found.');
         }
 
+        const effectiveImage =
+          input.image_url === undefined ? existing.image_url : imageUrl;
+
         this.db
           .prepare(
-            'UPDATE products SET product_name = ?, description = ?, price = ? WHERE product_id = ?'
+            'UPDATE products SET product_name = ?, description = ?, price = ?, category = ?, image_url = ? WHERE product_id = ?'
           )
-          .run(productName, description, normalizedPrice, targetProductId);
+          .run(productName, description, normalizedPrice, category, effectiveImage, targetProductId);
 
         this.db
           .prepare('UPDATE inventory SET quantity = ?, stock_status = ? WHERE product_id = ?')
           .run(quantity, stockStatus, targetProductId);
       } else {
         const insertProd = this.db
-          .prepare('INSERT INTO products (product_name, description, price) VALUES (?, ?, ?)')
-          .run(productName, description, normalizedPrice);
+          .prepare(
+            'INSERT INTO products (product_name, description, price, category, image_url) VALUES (?, ?, ?, ?, ?)'
+          )
+          .run(productName, description, normalizedPrice, category, imageUrl);
         targetProductId = Number(insertProd.lastInsertRowid);
 
         this.db
@@ -257,6 +340,7 @@ export class GreenCartService {
         .prepare(
           `SELECT
              p.product_id, p.product_name, p.description, CAST(p.price AS REAL) AS price,
+             p.category, p.image_url,
              i.inventory_id, i.quantity, i.stock_status
            FROM products p
            INNER JOIN inventory i ON i.product_id = p.product_id
@@ -308,6 +392,7 @@ export class GreenCartService {
         .prepare(
           `SELECT
              p.product_id, p.product_name, p.description, CAST(p.price AS REAL) AS price,
+             p.category, p.image_url,
              i.inventory_id, i.quantity, i.stock_status
            FROM products p
            INNER JOIN inventory i ON i.product_id = p.product_id
@@ -700,7 +785,7 @@ export class GreenCartService {
       .all() as unknown as SafeUser[];
     const products = this.db
       .prepare(
-        'SELECT product_id, product_name, description, CAST(price AS REAL) AS price FROM products ORDER BY product_id ASC'
+        'SELECT product_id, product_name, description, CAST(price AS REAL) AS price, category, image_url FROM products ORDER BY product_id ASC'
       )
       .all() as unknown as ProductRow[];
     const inventory = this.db

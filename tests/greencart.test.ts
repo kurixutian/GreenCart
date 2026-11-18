@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -345,5 +347,75 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     const refreshedCookies = meRes.headers['set-cookie'] as string[];
     expect(refreshedCookies.some((c) => c.startsWith('gc_session='))).toBe(true);
     expect(refreshedCookies.some((c) => c.startsWith('gc_csrf='))).toBe(true);
+  });
+
+  it('supports Phase 1 category filtering, product image metadata, and safe admin image uploads', () => {
+    const maria = service.login('maria_santos', 'customer123');
+    const admin = service.login('admin_qcu', 'admin123');
+
+    const drinkware = service.listCatalog('', 'ALL', 'Drinkware');
+    expect(drinkware.length).toBe(1);
+    expect(drinkware[0].product_name).toContain('Tumbler');
+    expect(drinkware[0].image_url).toBe('/images/products/product-3.svg');
+
+    // Non-admin upload blocked
+    const tinyPngB64 = Buffer.from(
+      '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489',
+      'hex'
+    ).toString('base64');
+
+    expect(() =>
+      service.saveProductImageUpload(maria.account_type, {
+        filename: 'test.png',
+        mimeType: 'image/png',
+        base64Data: tinyPngB64,
+      })
+    ).toThrowError(/Only administrators/);
+
+    // Invalid MIME rejected
+    expect(() =>
+      service.saveProductImageUpload(admin.account_type, {
+        filename: 'doc.pdf',
+        mimeType: 'application/pdf',
+        base64Data: tinyPngB64,
+      })
+    ).toThrowError(/Unsupported image format/);
+
+    // Oversized (>2MB) rejected
+    const oversizedB64 = Buffer.alloc(2 * 1024 * 1024 + 8, 1).toString('base64');
+    expect(() =>
+      service.saveProductImageUpload(admin.account_type, {
+        filename: 'huge.png',
+        mimeType: 'image/png',
+        base64Data: oversizedB64,
+      })
+    ).toThrowError(/2 MB/);
+
+    // Valid PNG upload succeeds and attaches to new product
+    const uploaded = service.saveProductImageUpload(admin.account_type, {
+      filename: 'straw.png',
+      mimeType: 'image/png',
+      base64Data: tinyPngB64,
+    });
+    expect(uploaded.image_url).toMatch(/^\/uploads\/products\/.+\.png$/);
+
+    try {
+      const created = service.upsertProduct(admin.account_type, {
+        product_name: 'Stainless Straw Kit',
+        description: 'Reusable metal straws with cleaning brush.',
+        price: 120,
+        quantity: 14,
+        category: 'Drinkware',
+        image_url: uploaded.image_url,
+      });
+      expect(created.category).toBe('Drinkware');
+      expect(created.image_url).toBe(uploaded.image_url);
+      expect(service.listCatalog('', 'ALL', 'Drinkware').length).toBe(2);
+    } finally {
+      const diskPath = path.join(process.cwd(), 'public', uploaded.image_url);
+      if (fs.existsSync(diskPath)) {
+        fs.unlinkSync(diskPath);
+      }
+    }
   });
 });

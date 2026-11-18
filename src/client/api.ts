@@ -83,10 +83,11 @@ export const api = {
     setCsrfToken(null);
   },
 
-  async getCatalog(search = '', status = 'ALL'): Promise<CatalogItem[]> {
+  async getCatalog(search = '', status = 'ALL', category = 'ALL'): Promise<CatalogItem[]> {
     const params = new URLSearchParams();
     if (search.trim()) params.set('search', search.trim());
     if (status && status !== 'ALL') params.set('status', status);
+    if (category && category !== 'ALL') params.set('category', category);
     const qs = params.toString();
     const res = await requestJson<{ items: CatalogItem[] }>(
       `/api/catalog${qs ? `?${qs}` : ''}`
@@ -99,11 +100,30 @@ export const api = {
     return res.customers;
   },
 
+  async uploadProductImage(file: File): Promise<{ image_url: string }> {
+    const base64Data = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Failed to read image file.'));
+      reader.readAsDataURL(file);
+    });
+    return requestJson<{ image_url: string }>('/api/uploads/product-image', {
+      method: 'POST',
+      body: JSON.stringify({
+        filename: file.name,
+        mimeType: file.type,
+        base64Data,
+      }),
+    });
+  },
+
   async createProduct(payload: {
     product_name: string;
     description: string;
     price: number;
     quantity: number;
+    category?: string;
+    image_url?: string | null;
   }): Promise<CatalogItem> {
     const res = await requestJson<{ item: CatalogItem }>('/api/products', {
       method: 'POST',
@@ -119,6 +139,8 @@ export const api = {
       description: string;
       price: number;
       quantity: number;
+      category?: string;
+      image_url?: string | null;
     }
   ): Promise<CatalogItem> {
     const res = await requestJson<{ item: CatalogItem }>(`/api/products/${productId}`, {
