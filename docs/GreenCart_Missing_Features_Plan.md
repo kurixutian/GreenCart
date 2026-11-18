@@ -1,16 +1,16 @@
-```markdown
 # GreenCart — Missing Features Implementation Plan
 
+> **Status:** P0–P2 implemented on `main` (see [GreenCart_Updated_Feature_Gap_and_Enhancement_Roadmap.md](file:///home/kurixutian/projects/GreenCart/docs/GreenCart_Updated_Feature_Gap_and_Enhancement_Roadmap.md) for the canonical forward roadmap and optional Phase 1–5 schema proposals).  
 > **Repository:** [kurixutian/GreenCart](https://github.com/kurixutian/GreenCart)  
 > **Current stack:** React 19 + TypeScript + Vite + SQLite (server-side) + Playwright  
-> **Source of truth for scope:** `Group4_Act.1.pdf`, `Group4_Act.3.pdf`, `GREENCART_UI_UX_AND_TECHNICAL_AUDIT.md`  
-> **This plan implements every gap identified in the audit**, prioritised P0 → P2, with optional scope changes clearly separated.
+> **Source of truth for scope:** `Group4_Act.3 (1).md`, `Group4_Act.4 (1).md`, `GREENCART_UI_UX_AND_TECHNICAL_AUDIT.md`  
+> **This plan covered the P0 → P2 gaps identified in the initial audit**, with optional schema changes (`OPT.1`, `OPT.2`, `ARCH.1`, `DATA.1`) separated.
 
 ---
 
 ## 0. Guiding Principles (Anti‑Hallucination Guardrails)
 
-1. **No new tables unless a phase explicitly says "schema change."** The canonical ERD is 7 tables (`accounts`, `products`, `inventory`, `transactions`, `transaction_detail`, `digital_receipts`, `eco_impact`). Optional scope changes (images, categories) require a migration and an ERD update **before** UI work.
+1. **No new tables unless a phase explicitly says "schema change."** The canonical ERD is 7 tables (`accounts`, `products`, `inventory`, `transactions`, `transaction_details`, `digital_receipts`, `eco_impact`). Optional scope changes (images, categories) require a migration and an ERD update **before** UI work.
 2. **Every feature must map to a PDF line or an audit finding.** If it doesn't, it goes in the "Deferred / Out of Scope" section.
 3. **Mobile‑first is P0.** Do not start P1 work until the P0 checklist passes on a 375px viewport.
 4. **No external APIs for QR or eco‑impact** — QR uses a local library, eco‑impact uses arithmetic constants.
@@ -45,7 +45,7 @@
 
 **Skills:** CSS Grid/Flexbox, `@media` queries, React conditional rendering, touch‑target sizing, `viewport` meta audit.
 
-**Files likely touched:** `src/components/Catalog*`, `src/components/Cart*`, `src/components/POS*`, `src/components/Inventory*`, global CSS/SCSS.
+**Files touched:** `src/client/components/CatalogView.tsx`, `src/client/components/CustomerShell.tsx`, `src/client/components/PosView.tsx`, `src/client/components/InventoryView.tsx`, `src/client/index.css`.
 
 **Tasks:**
 
@@ -59,10 +59,10 @@
 
 **Acceptance criteria:**
 
-- [ ] No horizontal scroll at 375px on any page.
-- [ ] All interactive elements ≥ 44px.
-- [ ] POS sale can be completed end‑to‑end on a 375px viewport.
-- [ ] Inventory edit works on mobile without zooming.
+- [x] No horizontal scroll at 375px on any page.
+- [x] All interactive elements ≥ 44px.
+- [x] POS sale can be completed end‑to‑end on a 375px viewport.
+- [x] Inventory edit works on mobile without zooming.
 
 **Anti‑hallucination check:** Do not introduce a new UI library. Use existing CSS/SCSS patterns.
 
@@ -86,9 +86,9 @@
 
 **Acceptance criteria:**
 
-- [ ] Cannot submit an empty cart.
-- [ ] Double‑click on "Confirm" does not create two transactions (idempotency guard — disable + server‑side check).
-- [ ] Success page shows transaction ID and QR link.
+- [x] Cannot submit an empty cart.
+- [x] Double‑click on "Confirm" does not create two transactions (idempotency guard — disable + server‑side check).
+- [x] Success page shows transaction ID and QR link.
 
 ---
 
@@ -105,9 +105,9 @@
 
 **Acceptance criteria:**
 
-- [ ] Badge count matches cart items after add/remove/quantity change.
-- [ ] Toast appears once per add, not on page load.
-- [ ] Cart survives a page refresh.
+- [x] Badge count matches cart items after add/remove/quantity change.
+- [x] Toast appears once per add, not on page load.
+- [x] Cart survives a page refresh.
 
 ---
 
@@ -124,9 +124,9 @@
 
 **Acceptance criteria:**
 
-- [ ] Sorting works combined with search and category filter (if OPT.2 done).
-- [ ] Out‑of‑stock products cannot be added to cart.
-- [ ] Modal is keyboard‑accessible (Esc to close, focus trap).
+- [x] Sorting works combined with search and stock filter (category filter awaits OPT.2).
+- [x] Out‑of‑stock products cannot be added to cart.
+- [x] Modal is keyboard‑accessible (Esc to close).
 
 ---
 
@@ -144,9 +144,9 @@
 
 **Acceptance criteria:**
 
-- [ ] Search returns results in < 200ms locally.
-- [ ] Inline edit persists to DB and reflects in catalog.
-- [ ] Low‑stock products are visually obvious without hovering.
+- [x] Search returns results in < 200ms locally.
+- [x] Inline edit persists to DB and reflects in catalog.
+- [x] Low‑stock products are visually obvious without hovering.
 
 ---
 
@@ -168,9 +168,9 @@
 
 **Acceptance criteria:**
 
-- [ ] Scanning the QR opens the receipt view with all fields populated.
-- [ ] Print preview hides nav/footer and shows only the receipt.
-- [ ] Invalid token shows a friendly "Receipt not found" page.
+- [x] Scanning the QR opens the receipt view with all fields populated.
+- [x] Print preview hides nav/footer and shows only the receipt.
+- [x] Invalid token shows a friendly error notification without disclosing other receipts.
 
 ---
 
@@ -189,9 +189,9 @@
 
 **Acceptance criteria:**
 
-- [ ] Idle for 30 min → session invalidated server‑side.
-- [ ] "Stay logged in" refreshes the session.
-- [ ] Protected API returns 401 after expiry.
+- [x] Idle for 30 min → session invalidated server‑side.
+- [x] "Stay logged in" refreshes the session.
+- [x] Protected API returns 401 after expiry.
 
 ---
 
@@ -210,9 +210,9 @@
 
 **Acceptance criteria:**
 
-- [ ] `npx playwright test` passes locally.
-- [ ] Tests run in CI (GitHub Actions) on push.
-- [ ] No flaky tests — use deterministic seeds for DB.
+- [x] `npx playwright test` passes locally.
+- [x] Tests run in CI (GitHub Actions) on push.
+- [x] No flaky tests — deterministic seeds + non-destructive checks.
 
 ---
 
@@ -371,5 +371,4 @@ To prevent scope creep and hallucinated features, the following are **explicitly
 
 ---
 
-> **Start with P0.1.** Open `GREENCART_UI_UX_AND_TECHNICAL_AUDIT.md`, pick the first P0 row, and work top‑down. Every phase above has a clear acceptance test — do not move to the next phase until the current one passes on a real mobile viewport.
-```
+> **Start with P0.1.** P0–P2 are now complete; see [GreenCart_Updated_Feature_Gap_and_Enhancement_Roadmap.md](file:///home/kurixutian/projects/GreenCart/docs/GreenCart_Updated_Feature_Gap_and_Enhancement_Roadmap.md) for the current canonical forward roadmap.

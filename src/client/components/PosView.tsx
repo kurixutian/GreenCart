@@ -358,7 +358,7 @@ export function PosView({
                       {item.quantity} left
                     </span>
                   </div>
-                  <p className="mt-1 line-clamp-1 text-xs text-slate-500">{item.description}</p>
+                  <p className="mt-1 line-clamp-1 text-xs text-slate-600">{item.description}</p>
                   <div className="mt-3 flex w-full items-center justify-between border-t border-slate-100 pt-2.5">
                     <span className="font-mono text-sm font-extrabold text-brand-700 tabular-nums">
                       {formatCurrency(item.price)}

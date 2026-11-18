@@ -73,13 +73,35 @@ test.describe('GreenCart Browser E2E, Mobile P0 & Accessibility', () => {
 
     await page.screenshot({ path: path.join(AUDIT_DIR, `receipt-${tag}.png`) });
 
-    // Purchase History & Eco-Impact
+    // Axe on Receipt View + invalid QR token lookup safety check
+    const receiptAxe = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(receiptAxe.violations).toEqual([]);
+
+    const savedUrl = page.url();
+    await page
+      .getByPlaceholder(/Enter QR receipt token/i)
+      .fill('GC-00000000000000000000000000000000');
+    await page.getByRole('button', { name: /Verify Receipt Token/i }).click();
+    await expect(page.getByText(/No digital receipt matched that QR token/i)).toBeVisible();
+    expect(page.url()).toBe(savedUrl);
+
+    // Purchase History & Eco-Impact + Axe checks
     await page.locator('nav:visible').getByRole('button', { name: /History/i }).click();
     await expect(page.getByRole('heading', { name: 'Purchase History' })).toBeVisible();
+    const historyAxe = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(historyAxe.violations).toEqual([]);
 
     await page.locator('nav:visible').getByRole('button', { name: /Eco-Impact/i }).click();
     await expect(page.getByRole('heading', { name: 'Eco-Impact Dashboard' })).toBeVisible();
     await expect(page.getByText(/Cumulative Paper-Saving Milestone/i)).toBeVisible();
+    const ecoAxe = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(ecoAxe.violations).toEqual([]);
   });
 
   test('Admin P0/P1 flow: dashboard, POS F2/Enter shortcut sale, low-stock priority, inline edit & Axe', async ({
@@ -98,10 +120,18 @@ test.describe('GreenCart Browser E2E, Mobile P0 & Accessibility', () => {
     expect(posOverflow).toBe(false);
     await page.screenshot({ path: path.join(AUDIT_DIR, `pos-${tag}.png`) });
 
-    // Verify dynamic Walk-In Customer default
+    const posAxe = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(posAxe.violations).toEqual([]);
+
+    // Verify dynamic Walk-In Customer default & empty POS register submit button is disabled
     if (isNarrow) {
       await page.getByRole('button', { name: /Open Register/i }).click();
     }
+    await expect(
+      page.getByRole('button', { name: /Complete Sale and Generate QR Receipt/i })
+    ).toBeDisabled();
     const customerSelect = page.locator(
       isNarrow ? '#pos-customer-select-mobile' : '#pos-customer-select'
     );
@@ -141,6 +171,11 @@ test.describe('GreenCart Browser E2E, Mobile P0 & Accessibility', () => {
     );
     expect(invOverflow).toBe(false);
     await page.screenshot({ path: path.join(AUDIT_DIR, `inventory-${tag}.png`) });
+
+    const inventoryAxe = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(inventoryAxe.violations).toEqual([]);
 
     if (!isNarrow) {
       // First row is Out of Stock (Natural Loofah Dish Scrubbers)

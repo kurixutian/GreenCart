@@ -149,9 +149,14 @@ export function EcoImpactView({
             Eco-Impact Transaction Breakdown ({summary?.scope === 'store' ? 'Store-Wide' : 'Personal'})
           </h3>
         </div>
-        <div className="overflow-x-auto">
+        <div
+          className="overflow-x-auto focus:outline-2 focus:outline-brand-600"
+          tabIndex={0}
+          role="region"
+          aria-label="Eco-Impact Transaction Breakdown"
+        >
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+            <thead className="bg-slate-50 text-xs font-semibold text-slate-600">
               <tr>
                 <th className="px-5 py-3">Transaction</th>
                 <th className="px-4 py-3">Customer</th>

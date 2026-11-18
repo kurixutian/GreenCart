@@ -324,4 +324,26 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     const expiredToken = signSessionToken(maria, 'unit-secret', -1000);
     expect(verifySessionToken(expiredToken, 'unit-secret')).toBeNull();
   });
+
+  it('refreshes rolling session and CSRF cookies on GET /api/auth/me', async () => {
+    const middleware = createApiMiddleware(db, 'rolling-secret');
+    const loginRes = await invokeMiddleware(middleware, {
+      method: 'POST',
+      url: '/api/auth/login',
+      body: { username: 'maria_santos', password: 'customer123' },
+    });
+    const sessionCookie = (loginRes.headers['set-cookie'] as string[])
+      .find((c) => c.startsWith('gc_session='))!
+      .split(';')[0];
+
+    const meRes = await invokeMiddleware(middleware, {
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: { cookie: sessionCookie },
+    });
+    expect(meRes.statusCode).toBe(200);
+    const refreshedCookies = meRes.headers['set-cookie'] as string[];
+    expect(refreshedCookies.some((c) => c.startsWith('gc_session='))).toBe(true);
+    expect(refreshedCookies.some((c) => c.startsWith('gc_csrf='))).toBe(true);
+  });
 });

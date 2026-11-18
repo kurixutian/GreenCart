@@ -1,8 +1,8 @@
 # GreenCart — UI/UX & Technical Audit and Improvement Roadmap
 
+> **Canonical Forward Roadmap:** Superseded for new post-`0baa97c` enhancements by [GreenCart_Updated_Feature_Gap_and_Enhancement_Roadmap.md](file:///home/kurixutian/projects/GreenCart/docs/GreenCart_Updated_Feature_Gap_and_Enhancement_Roadmap.md).  
 > **Source Assessed:** `kurixutian/GreenCart` (`main` branch)  
-> **Assessment Summary:** GreenCart has moved beyond a simple mockup. It now has a React 19 + TypeScript frontend, Tailwind CSS 4, a Node.js SQLite backend, customer/admin role separation, QR receipts, inventory handling, and automated tests.  
-> **Next Objective:** Rather than adding lots of features, make the customer and admin experiences feel like a coherent, polished retail application while tightening reliability, mobile usability, and the checkout workflow.
+> **Assessment Summary:** GreenCart has moved beyond a simple mockup. It now has separate Customer and Admin shells, React 19 + TypeScript + Tailwind CSS 4, Node.js SQLite backend, 128-bit QR receipts, rolling 30-minute sessions, Playwright + Axe E2E tests, and GitHub Actions CI.
 
 ---
 
@@ -163,18 +163,18 @@ Do not introduce advanced accounting, revenue forecasting, supplier management, 
 
 ---
 
-## 4. Technical Improvements Identified
+## 4. Technical Improvements Identified & Resolution Status
 
-| Area | Current observation | Recommended improvement |
+| Area | Original observation | Current status (`main`) |
 |---|---|---|
-| UI architecture | Shared role-based shell in `App.tsx` | Separate customer and admin layouts |
-| UI components | Custom components and Tailwind | Establish reusable design tokens and component patterns |
-| Browser tests | Vitest tests exist; no Playwright dependency in `package.json` | Add browser-level tests |
-| Database | SQLite, seven canonical entities | Preserve existing ERD |
-| Authentication | scrypt password hashing and signed sessions | Add session expiration and production secret requirements |
-| QR tokens | Six random bytes (48 bits) in `crypto.ts` | Increase token entropy (at least 128 bits) and test collision handling |
-| MCP config | Absolute local filesystem/database paths in `.mcp.json` | Document per-developer MCP configuration |
-| Documentation | README / plan mentions `lucide-react` | Align documentation with actual dependencies (inline SVG icons) |
+| UI architecture | Shared role-based shell in `App.tsx` | **Resolved** (`CustomerShell.tsx` & `AdminShell.tsx`) |
+| UI components | Custom components and Tailwind | **Resolved** (design tokens, modals, bottom sheets, `min-h-11` targets) |
+| Browser tests | No Playwright dependency in `package.json` | **Resolved** (`@playwright/test`, `@axe-core/playwright`, `.github/workflows/ci.yml`) |
+| Database | SQLite, seven canonical entities | **Preserved** (`db/schema.sql` + `idx_products_name`) |
+| Authentication | Signed sessions lacked expiry | **Resolved** (rolling 30-min `exp`, 25-min idle modal, production secret guard) |
+| QR tokens | Six random bytes (48 bits) in `crypto.ts` | **Resolved** (16 random bytes / 128 bits) |
+| MCP config | Machine-specific local paths in `.mcp.json` | Documented per-developer setup in `README.md` |
+| Documentation | README mentioned `lucide-react` | **Resolved** (aligned to inline SVG icons + canonical roadmap) |
 
 ### Priority Security Hardening Items
 1. **Production Session Secret & Expiration (`apiPlugin.ts` / `crypto.ts`):** Production deployments must require a strong externally configured secret rather than silently falling back to a development string, and signed session tokens should enforce expiration (`exp`).
