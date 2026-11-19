@@ -5,6 +5,18 @@ export interface CartEntry {
   quantity: number;
 }
 
+export function resolveAssetUrl(raw?: string | null): string {
+  const base = import.meta.env.BASE_URL.endsWith('/')
+    ? import.meta.env.BASE_URL
+    : `${import.meta.env.BASE_URL}/`;
+  const clean = (raw || '').trim();
+  if (!clean) return `${base}images/products/placeholder.svg`;
+  if (clean.startsWith('/images/') || clean.startsWith('/uploads/')) {
+    return `${base}${clean.slice(1)}`;
+  }
+  return clean;
+}
+
 export function formatCurrency(amount: number): string {
   return `₱${Number(amount).toLocaleString('en-PH', {
     minimumFractionDigits: 2,

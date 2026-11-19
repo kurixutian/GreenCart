@@ -15,6 +15,7 @@ import {
   formatCurrency,
   getStockBadgeClasses,
   mutateCart,
+  resolveAssetUrl,
   type CartEntry,
 } from '../utils/format';
 import {
@@ -25,7 +26,7 @@ import {
 } from '../../shared/types';
 import { api } from '../api';
 
-const FALLBACK_PRODUCT_IMAGE = '/images/products/placeholder.svg';
+const FALLBACK_PRODUCT_IMAGE = resolveAssetUrl();
 
 function getInitialCategory(): string {
   return new URLSearchParams(window.location.search).get('category') || 'ALL';
@@ -463,7 +464,7 @@ export function CatalogView({
                         className="relative mb-3 block w-full overflow-hidden rounded-xl bg-brand-50/70"
                       >
                         <img
-                          src={item.image_url || FALLBACK_PRODUCT_IMAGE}
+                          src={resolveAssetUrl(item.image_url)}
                           alt={item.product_name}
                           loading="lazy"
                           onError={(e) => {
@@ -575,7 +576,7 @@ export function CatalogView({
               </button>
             </div>
             <img
-              src={selectedProduct.image_url || FALLBACK_PRODUCT_IMAGE}
+              src={resolveAssetUrl(selectedProduct.image_url)}
               alt={selectedProduct.product_name}
               onError={(e) => {
                 e.currentTarget.src = FALLBACK_PRODUCT_IMAGE;

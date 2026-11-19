@@ -177,6 +177,11 @@ export function AuthView({ onAuthenticated, onNotify }: AuthViewProps) {
                 <p className="mt-1 text-sm text-slate-500">
                   Your account role automatically routes you to the Customer Portal or Admin POS.
                 </p>
+                {api.isStaticDemoMode() && (
+                  <p className="mt-2 inline-block rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900">
+                    GitHub Pages Browser Demo Mode (persisted in local browser storage)
+                  </p>
+                )}
               </div>
 
               <div>

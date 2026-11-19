@@ -1,7 +1,7 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Boxes, Edit3, History, Plus, RotateCcw, Search, X } from './Icons';
 import { api } from '../api';
-import { formatCurrency, getStockBadgeClasses } from '../utils/format';
+import { formatCurrency, getStockBadgeClasses, resolveAssetUrl } from '../utils/format';
 import {
   PRODUCT_CATEGORIES,
   type CatalogItem,
@@ -9,7 +9,7 @@ import {
   type StockStatus,
 } from '../../shared/types';
 
-const FALLBACK_IMAGE = '/images/products/placeholder.svg';
+const FALLBACK_IMAGE = resolveAssetUrl();
 const ADJUSTMENT_REASONS = [
   'Quick stock adjustment',
   'Restock shipment',
@@ -398,7 +398,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
                   <img
-                    src={item.image_url || FALLBACK_IMAGE}
+                    src={resolveAssetUrl(item.image_url)}
                     alt={item.product_name}
                     onError={(e) => {
                       e.currentTarget.src = FALLBACK_IMAGE;
@@ -505,7 +505,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
                         <img
-                          src={item.image_url || FALLBACK_IMAGE}
+                          src={resolveAssetUrl(item.image_url)}
                           alt={item.product_name}
                           onError={(e) => {
                             e.currentTarget.src = FALLBACK_IMAGE;
@@ -830,7 +830,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                 </label>
                 <div className="flex items-center gap-3">
                   <img
-                    src={imageUrlInput.trim() || FALLBACK_IMAGE}
+                    src={resolveAssetUrl(imageUrlInput)}
                     alt={nameInput || 'Product preview'}
                     onError={(e) => {
                       e.currentTarget.src = FALLBACK_IMAGE;

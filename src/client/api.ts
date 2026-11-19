@@ -1,3 +1,4 @@
+import { demoApi } from './demoStore';
 import type {
   AdminTransactionFilter,
   AdminTransactionItem,
@@ -13,6 +14,7 @@ import type {
 } from '../shared/types';
 
 let csrfTokenCache: string | null = null;
+let staticDemoMode = import.meta.env.VITE_STATIC_DEMO === 'true';
 
 function setCsrfToken(token: string | null): void {
   csrfTokenCache = token;
@@ -34,6 +36,11 @@ async function requestJson<T>(path: string, options: RequestInit = {}): Promise<
     headers,
   });
 
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json') && (res.status === 404 || res.status === 405)) {
+    throw new Error('API backend is unavailable on this static host.');
+  }
+
   const data = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) {
     throw new Error(data.error || `Request failed (${res.status})`);
@@ -53,18 +60,45 @@ function buildTransactionParams(filters: AdminTransactionFilter = {}): URLSearch
 }
 
 export const api = {
+  isStaticDemoMode(): boolean {
+    return staticDemoMode;
+  },
+
   async me(): Promise<{ user: SafeUser | null; csrfToken: string | null }> {
-    const res = await requestJson<{ user: SafeUser | null; csrfToken: string | null }>(
-      '/api/auth/me'
-    );
-    setCsrfToken(res.csrfToken);
-    return res;
+    if (staticDemoMode) {
+      return demoApi.me();
+    }
+    try {
+      const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json') || res.status === 404 || res.status === 405) {
+        staticDemoMode = true;
+        return demoApi.me();
+      }
+      const data = (await res.json()) as {
+        user: SafeUser | null;
+        csrfToken: string | null;
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.error || `Request failed (${res.status})`);
+      }
+      setCsrfToken(data.csrfToken);
+      return { user: data.user, csrfToken: data.csrfToken };
+    } catch (err) {
+      if (err instanceof TypeError) {
+        staticDemoMode = true;
+        return demoApi.me();
+      }
+      throw err;
+    }
   },
 
   async login(
     username: string,
     password: string
   ): Promise<{ user: SafeUser; csrfToken: string }> {
+    if (staticDemoMode) return demoApi.login(username, password);
     const res = await requestJson<{ user: SafeUser; csrfToken: string }>(
       '/api/auth/login',
       {
@@ -81,6 +115,7 @@ export const api = {
     password: string,
     full_name: string
   ): Promise<{ user: SafeUser; csrfToken: string }> {
+    if (staticDemoMode) return demoApi.register({ username, password, full_name });
     const res = await requestJson<{ user: SafeUser; csrfToken: string }>(
       '/api/auth/register',
       {
@@ -93,11 +128,17 @@ export const api = {
   },
 
   async logout(): Promise<void> {
+    if (staticDemoMode) {
+      await demoApi.logout();
+      setCsrfToken(null);
+      return;
+    }
     await requestJson<{ ok: boolean }>('/api/auth/logout', { method: 'POST' });
     setCsrfToken(null);
   },
 
   async updateProfile(full_name: string): Promise<{ user: SafeUser; csrfToken: string }> {
+    if (staticDemoMode) return demoApi.updateProfile(full_name);
     const res = await requestJson<{ user: SafeUser; csrfToken: string }>(
       '/api/account/profile',
       {
@@ -110,6 +151,7 @@ export const api = {
   },
 
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    if (staticDemoMode) return demoApi.changePassword(currentPassword, newPassword);
     await requestJson<{ ok: boolean }>('/api/account/password', {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
@@ -122,6 +164,7 @@ export const api = {
     category = 'ALL',
     includeArchived = false
   ): Promise<CatalogItem[]> {
+    if (staticDemoMode) return demoApi.getCatalog(search, status, category, includeArchived);
     const params = new URLSearchParams();
     if (search.trim()) params.set('search', search.trim());
     if (status && status !== 'ALL') params.set('status', status);
@@ -135,11 +178,13 @@ export const api = {
   },
 
   async getCustomers(): Promise<SafeUser[]> {
+    if (staticDemoMode) return demoApi.getCustomers();
     const res = await requestJson<{ customers: SafeUser[] }>('/api/customers');
     return res.customers;
   },
 
   async uploadProductImage(file: File): Promise<{ image_url: string }> {
+    if (staticDemoMode) return demoApi.uploadProductImage(file);
     const base64Data = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result || ''));
@@ -166,6 +211,7 @@ export const api = {
     image_url?: string | null;
     sku?: string | null;
   }): Promise<CatalogItem> {
+    if (staticDemoMode) return demoApi.createProduct(payload);
     const res = await requestJson<{ item: CatalogItem }>('/api/products', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -188,6 +234,7 @@ export const api = {
       adjustment_reason?: string;
     }
   ): Promise<CatalogItem> {
+    if (staticDemoMode) return demoApi.updateProduct(productId, payload);
     const res = await requestJson<{ item: CatalogItem }>(`/api/products/${productId}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
@@ -196,6 +243,7 @@ export const api = {
   },
 
   async setProductArchived(productId: number, isArchived: boolean): Promise<CatalogItem> {
+    if (staticDemoMode) return demoApi.setProductArchived(productId, isArchived);
     const res = await requestJson<{ item: CatalogItem }>(`/api/products/${productId}/archive`, {
       method: 'PATCH',
       body: JSON.stringify({ is_archived: isArchived }),
@@ -208,6 +256,7 @@ export const api = {
     delta: number,
     reason = 'Quick stock adjustment'
   ): Promise<CatalogItem> {
+    if (staticDemoMode) return demoApi.adjustStock(productId, delta, reason);
     const res = await requestJson<{ item: CatalogItem }>(
       `/api/inventory/${productId}/adjust`,
       {
@@ -222,6 +271,7 @@ export const api = {
     productId?: number,
     limit = 100
   ): Promise<InventoryAdjustmentView[]> {
+    if (staticDemoMode) return demoApi.getInventoryAdjustments(productId, limit);
     const params = new URLSearchParams();
     if (productId) params.set('productId', String(productId));
     if (limit) params.set('limit', String(limit));
@@ -237,6 +287,7 @@ export const api = {
     lineItems: SaleLineInput[];
     checkoutToken: string;
   }): Promise<DigitalReceiptView> {
+    if (staticDemoMode) return demoApi.processSale(payload);
     const res = await requestJson<{ receipt: DigitalReceiptView }>('/api/sales', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -245,6 +296,7 @@ export const api = {
   },
 
   async getReceiptByToken(qrCode: string): Promise<DigitalReceiptView> {
+    if (staticDemoMode) return demoApi.getReceiptByToken(qrCode);
     const res = await requestJson<{ receipt: DigitalReceiptView }>(
       `/api/receipts/token/${encodeURIComponent(qrCode)}`
     );
@@ -252,6 +304,7 @@ export const api = {
   },
 
   async getReceiptByTransactionId(transactionId: number): Promise<DigitalReceiptView> {
+    if (staticDemoMode) return demoApi.getReceiptByTransactionId(transactionId);
     const res = await requestJson<{ receipt: DigitalReceiptView }>(
       `/api/transactions/${transactionId}/receipt`
     );
@@ -259,6 +312,7 @@ export const api = {
   },
 
   async getHistory(): Promise<PurchaseHistoryItem[]> {
+    if (staticDemoMode) return demoApi.getHistory();
     const res = await requestJson<{ history: PurchaseHistoryItem[] }>('/api/history');
     return res.history;
   },
@@ -266,6 +320,7 @@ export const api = {
   async getAdminTransactions(
     filters: AdminTransactionFilter = {}
   ): Promise<AdminTransactionItem[]> {
+    if (staticDemoMode) return demoApi.getAdminTransactions(filters);
     const params = buildTransactionParams(filters);
     const qs = params.toString();
     const res = await requestJson<{ transactions: AdminTransactionItem[] }>(
@@ -280,7 +335,12 @@ export const api = {
     return `/api/transactions/export.csv${qs ? `?${qs}` : ''}`;
   },
 
+  downloadDemoTransactionsCsv(filters: AdminTransactionFilter = {}): void {
+    demoApi.downloadTransactionsCsv(filters);
+  },
+
   async getEcoImpact(scope: EcoScope): Promise<EcoImpactSummary> {
+    if (staticDemoMode) return demoApi.getEcoImpact(scope);
     const res = await requestJson<{ summary: EcoImpactSummary }>(
       `/api/eco-impact?scope=${encodeURIComponent(scope)}`
     );
@@ -288,11 +348,13 @@ export const api = {
   },
 
   async getDbSnapshot(): Promise<DatabaseSnapshot> {
+    if (staticDemoMode) return demoApi.getDbSnapshot();
     const res = await requestJson<{ snapshot: DatabaseSnapshot }>('/api/db/snapshot');
     return res.snapshot;
   },
 
   async resetDb(): Promise<void> {
+    if (staticDemoMode) return demoApi.resetDb();
     await requestJson<{ ok: boolean }>('/api/db/reset', { method: 'POST' });
   },
 };

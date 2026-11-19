@@ -212,6 +212,12 @@ export function AdminOverviewView({
               <a
                 href={api.getTransactionsExportUrl(txFilters)}
                 download="greencart-transactions.csv"
+                onClick={(e) => {
+                  if (api.isStaticDemoMode()) {
+                    e.preventDefault();
+                    api.downloadDemoTransactionsCsv(txFilters);
+                  }
+                }}
                 className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50"
               >
                 <ScrollText className="h-3.5 w-3.5 text-slate-600" />

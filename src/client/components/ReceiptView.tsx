@@ -42,7 +42,7 @@ export function ReceiptView({
       return;
     }
     setTokenInput(activeReceipt.qr_code);
-    const receiptUrl = `${window.location.origin}/?receipt=${encodeURIComponent(
+    const receiptUrl = `${window.location.origin}${window.location.pathname}?receipt=${encodeURIComponent(
       activeReceipt.qr_code
     )}`;
     QRCode.toDataURL(receiptUrl, {
