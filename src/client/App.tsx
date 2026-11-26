@@ -233,6 +233,16 @@ export function App() {
     }
   }
 
+  const openReceiptFromUrl = useCallback(async (targetUser: SafeUser) => {
+    const urlReceipt = new URLSearchParams(window.location.search).get('receipt');
+    if (!urlReceipt) return;
+    const found = await api.getReceiptByToken(urlReceipt).catch(() => null);
+    if (!found) return;
+    setActiveReceipt(found);
+    if (targetUser.account_type === 'admin') setAdminSection('receipt');
+    else setCustomerSection('receipt');
+  }, []);
+
   useEffect(() => {
     api
       .me()
@@ -245,23 +255,14 @@ export function App() {
           setCustomerSection('catalog');
           setAdminSection('pos');
           await loadRoleData(currentUser, defaultScope);
-
-          const urlReceipt = new URLSearchParams(window.location.search).get('receipt');
-          if (urlReceipt) {
-            const found = await api.getReceiptByToken(urlReceipt).catch(() => null);
-            if (found) {
-              setActiveReceipt(found);
-              if (currentUser.account_type === 'admin') setAdminSection('receipt');
-              else setCustomerSection('receipt');
-            }
-          }
+          await openReceiptFromUrl(currentUser);
         }
       })
       .catch(() => {
         // Unauthenticated
       })
       .finally(() => setInitializing(false));
-  }, [loadRoleData]);
+  }, [loadRoleData, openReceiptFromUrl]);
 
   async function handleAuthenticated(nextUser: SafeUser) {
     setUser(nextUser);
@@ -273,6 +274,7 @@ export function App() {
     setCustomerSection('catalog');
     setAdminSection('pos');
     await loadRoleData(nextUser, defaultScope);
+    await openReceiptFromUrl(nextUser);
   }
 
   async function handleSaleCompleted(receipt: DigitalReceiptView) {
