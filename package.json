@@ -12,14 +12,12 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "mysql2": "^3.24.6",
     "qrcode": "^1.5.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
-    "@lhci/cli": "^0.16.1",
     "@playwright/test": "^1.65.1",
     "@tailwindcss/vite": "^4.1.8",
     "@types/node": "^24.0.0",

@@ -282,3 +282,18 @@ export function calculateEcoMetrics(distinctLineCount: number): {
   );
   return { paper_saved, carbon_reduction };
 }
+
+export function deriveStockStatus(quantity: number, reorderLevel = 10): StockStatus {
+  if (quantity <= 0) return 'Out of Stock';
+  if (quantity <= reorderLevel) return 'Low Stock';
+  return 'In Stock';
+}
+
+export function sanitizeCsvCell(val: string | number | null | undefined): string {
+  const raw = val === null || val === undefined ? '' : String(val);
+  const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  if (/[",\n\r]/.test(safe)) {
+    return `"${safe.replace(/"/g, '""')}"`;
+  }
+  return safe;
+}

@@ -3,11 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Connect, Plugin } from 'vite';
 import { signSessionToken, verifySessionToken } from './crypto.ts';
-import {
-  createSqliteClient,
-  openConfiguredDbClient,
-  type DbClient,
-} from './dbClient.ts';
+import { openDatabase, resetDatabase } from './db.ts';
 import { AppError, GreenCartService } from './service.ts';
 import type {
   AdminTransactionFilter,
@@ -106,14 +102,10 @@ function parseTransactionFilters(url: URL): AdminTransactionFilter {
 }
 
 export function createApiMiddleware(
-  dbOrClient: DbClient | DatabaseSync,
+  db: DatabaseSync,
   secret: string = resolveSessionSecret()
 ): Connect.NextHandleFunction {
-  const dbClient: DbClient =
-    typeof (dbOrClient as DbClient).queryAll === 'function'
-      ? (dbOrClient as DbClient)
-      : createSqliteClient(dbOrClient as DatabaseSync);
-  const service = new GreenCartService(dbClient);
+  const service = new GreenCartService(db);
 
   return async (req, res, next) => {
     const urlStr = req.url || '/';
@@ -494,7 +486,7 @@ export function createApiMiddleware(
         if (actor.account_type !== 'admin') {
           throw new AppError(403, 'Only administrators can reset the database.');
         }
-        await dbClient.resetToSeed();
+        resetDatabase(db);
         sendJson(res, 200, { ok: true });
         return;
       }
@@ -512,35 +504,21 @@ export function createApiMiddleware(
 }
 
 export function greenCartApiPlugin(): Plugin {
-  let middlewarePromise: Promise<Connect.NextHandleFunction> | null = null;
-  const ensureMiddleware = (): Promise<Connect.NextHandleFunction> => {
-    if (!middlewarePromise) {
-      middlewarePromise = openConfiguredDbClient().then((client) => createApiMiddleware(client));
+  let db: DatabaseSync | null = null;
+  const ensureMiddleware = () => {
+    if (!db) {
+      db = openDatabase();
     }
-    return middlewarePromise;
+    return createApiMiddleware(db);
   };
 
   return {
     name: 'greencart-api-plugin',
     configureServer(server) {
-      server.middlewares.use(async (req, res, next) => {
-        try {
-          const mw = await ensureMiddleware();
-          mw(req, res, next);
-        } catch (err) {
-          next(err);
-        }
-      });
+      server.middlewares.use(ensureMiddleware());
     },
     configurePreviewServer(server) {
-      server.middlewares.use(async (req, res, next) => {
-        try {
-          const mw = await ensureMiddleware();
-          mw(req, res, next);
-        } catch (err) {
-          next(err);
-        }
-      });
+      server.middlewares.use(ensureMiddleware());
     },
   };
 }

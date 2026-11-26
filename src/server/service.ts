@@ -8,13 +8,10 @@ import {
   verifyPassword,
 } from './crypto.ts';
 import {
-  createSqliteClient,
-  type DbClient,
-  type DbTxContext,
-} from './dbClient.ts';
-import {
   ECO_IMPACT_SPEC,
   calculateEcoMetrics,
+  deriveStockStatus,
+  sanitizeCsvCell,
   type AccountRow,
   type AccountType,
   type AdminTransactionFilter,
@@ -35,10 +32,15 @@ import {
   type ReceiptLineItemView,
   type SafeUser,
   type SaleRequestPayload,
-  type StockStatus,
   type TransactionDetailRow,
   type TransactionRow,
 } from '../shared/types.ts';
+
+interface TxCtx {
+  queryAll<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
+  queryOne<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T | undefined>;
+  run(sql: string, params?: unknown[]): Promise<{ lastInsertRowid: number; changes: number }>;
+}
 
 export class AppError extends Error {
   statusCode: number;
@@ -48,21 +50,6 @@ export class AppError extends Error {
     this.name = 'AppError';
     this.statusCode = statusCode;
   }
-}
-
-export function deriveStockStatus(quantity: number, reorderLevel = 10): StockStatus {
-  if (quantity <= 0) return 'Out of Stock';
-  if (quantity <= reorderLevel) return 'Low Stock';
-  return 'In Stock';
-}
-
-function sanitizeCsvCell(val: string | number | null | undefined): string {
-  const raw = val === null || val === undefined ? '' : String(val);
-  const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
-  if (/[",\n\r]/.test(safe)) {
-    return `"${safe.replace(/"/g, '""')}"`;
-  }
-  return safe;
 }
 
 function toSafeUser(row: AccountRow): SafeUser {
@@ -75,15 +62,42 @@ function toSafeUser(row: AccountRow): SafeUser {
 }
 
 export class GreenCartService {
-  private readonly db: DbClient;
+  private readonly sqlite: DatabaseSync;
+  private readonly db: TxCtx & {
+    transaction<T>(fn: (tx: TxCtx) => Promise<T>): Promise<T>;
+  };
   private readonly processedCheckoutTokens = new Set<string>();
   private readonly inFlightCheckoutTokens = new Set<string>();
 
-  constructor(dbOrClient: DbClient | DatabaseSync) {
-    this.db =
-      typeof (dbOrClient as DbClient).queryAll === 'function'
-        ? (dbOrClient as DbClient)
-        : createSqliteClient(dbOrClient as DatabaseSync);
+  constructor(sqlite: DatabaseSync) {
+    this.sqlite = sqlite;
+    const ctx: TxCtx = {
+      queryAll: async <T = Record<string, unknown>>(sql: string, params: unknown[] = []) =>
+        this.sqlite.prepare(sql).all(...(params as never[])) as unknown as T[],
+      queryOne: async <T = Record<string, unknown>>(sql: string, params: unknown[] = []) =>
+        this.sqlite.prepare(sql).get(...(params as never[])) as unknown as T | undefined,
+      run: async (sql: string, params: unknown[] = []) => {
+        const res = this.sqlite.prepare(sql).run(...(params as never[]));
+        return {
+          lastInsertRowid: Number(res.lastInsertRowid ?? 0),
+          changes: Number(res.changes ?? 0),
+        };
+      },
+    };
+    this.db = {
+      ...ctx,
+      transaction: async <T>(fn: (tx: TxCtx) => Promise<T>): Promise<T> => {
+        this.sqlite.exec('BEGIN IMMEDIATE');
+        try {
+          const result = await fn(ctx);
+          this.sqlite.exec('COMMIT');
+          return result;
+        } catch (err) {
+          this.sqlite.exec('ROLLBACK');
+          throw err;
+        }
+      },
+    };
   }
 
   async login(username: string, password: string): Promise<SafeUser> {
@@ -456,7 +470,7 @@ export class GreenCartService {
     const normalizedPrice = Number(price.toFixed(2));
     const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-    const savedId = await this.db.transaction(async (tx: DbTxContext) => {
+    const savedId = await this.db.transaction(async (tx: TxCtx) => {
       let targetProductId = input.product_id;
 
       if (normalizedSku) {
@@ -601,9 +615,8 @@ export class GreenCartService {
     const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     await this.db.transaction(async (tx) => {
-      const lockClause = tx.dialect === 'mysql' ? ' FOR UPDATE' : '';
       const current = await tx.queryOne<{ quantity: number; reorder_level: number }>(
-        `SELECT quantity, reorder_level FROM inventory WHERE product_id = ?${lockClause}`,
+        'SELECT quantity, reorder_level FROM inventory WHERE product_id = ?',
         [productId]
       );
 
@@ -776,7 +789,6 @@ export class GreenCartService {
         }> = [];
 
         let totalCents = 0;
-        const lockClause = tx.dialect === 'mysql' ? ' FOR UPDATE' : '';
 
         for (const [productId, requestedQty] of mergedMap.entries()) {
           const row = await tx.queryOne<{
@@ -790,7 +802,7 @@ export class GreenCartService {
             `SELECT p.product_id, p.product_name, p.is_archived, CAST(p.price AS DECIMAL(10, 2)) AS price, i.quantity AS stock_qty, i.reorder_level
              FROM products p
              INNER JOIN inventory i ON i.product_id = p.product_id
-             WHERE p.product_id = ?${lockClause}`,
+             WHERE p.product_id = ?`,
             [productId]
           );
 

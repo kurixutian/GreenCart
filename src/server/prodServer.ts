@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { createApiMiddleware } from './apiPlugin.ts';
-import { openConfiguredDbClient } from './dbClient.ts';
+import { openDatabase } from './db.ts';
 
 const DIST_DIR = path.join(process.cwd(), 'dist');
 const UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads');
@@ -32,8 +32,11 @@ function serveStaticFile(res: http.ServerResponse, filePath: string): boolean {
 }
 
 async function main() {
-  const dbClient = await openConfiguredDbClient();
-  const apiMiddleware = createApiMiddleware(dbClient);
+  if (fs.existsSync(path.join(process.cwd(), '.env'))) {
+    process.loadEnvFile();
+  }
+  const db = openDatabase();
+  const apiMiddleware = createApiMiddleware(db);
   const port = Number(process.env.PORT || 5174);
   const host = process.env.HOST || '0.0.0.0';
 
@@ -68,12 +71,12 @@ async function main() {
   });
 
   server.listen(port, host, () => {
-    console.log(`GreenCart server (${dbClient.dialect}) running at http://localhost:${port}/`);
+    console.log(`GreenCart server (sqlite) running at http://localhost:${port}/`);
   });
 
-  const shutdown = async () => {
+  const shutdown = () => {
     server.close();
-    await dbClient.close();
+    db.close();
     process.exit(0);
   };
   process.on('SIGINT', () => void shutdown());

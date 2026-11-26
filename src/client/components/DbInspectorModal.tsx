@@ -134,7 +134,11 @@ export function DbInspectorModal({
           })}
         </div>
 
-        <div className="flex-1 overflow-auto p-6">
+        <div
+          tabIndex={0}
+          aria-label="Database records table"
+          className="flex-1 overflow-auto p-6 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500"
+        >
           {loading ? (
             <p className="text-sm text-slate-500">Loading database snapshot...</p>
           ) : rows.length === 0 ? (

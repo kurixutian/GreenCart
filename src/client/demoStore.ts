@@ -1,6 +1,8 @@
 import {
   calculateEcoMetrics,
+  deriveStockStatus,
   ECO_IMPACT_SPEC,
+  sanitizeCsvCell,
   type AdminTransactionFilter,
   type AdminTransactionItem,
   type CatalogItem,
@@ -18,7 +20,6 @@ import {
   type ReceiptLineItemView,
   type SafeUser,
   type SaleLineInput,
-  type StockStatus,
   type TransactionDetailRow,
   type TransactionRow,
 } from '../shared/types';
@@ -55,26 +56,11 @@ function nowTimestamp(): string {
   return new Date().toISOString().slice(0, 19).replace('T', ' ');
 }
 
-function deriveStockStatus(quantity: number, reorderLevel = 10): StockStatus {
-  if (quantity <= 0) return 'Out of Stock';
-  if (quantity <= reorderLevel) return 'Low Stock';
-  return 'In Stock';
-}
-
 function generateReceiptToken(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
   return `GC-${hex}`;
-}
-
-function sanitizeCsvCell(val: string | number | null | undefined): string {
-  const raw = val === null || val === undefined ? '' : String(val);
-  const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
-  if (/[",\n\r]/.test(safe)) {
-    return `"${safe.replace(/"/g, '""')}"`;
-  }
-  return safe;
 }
 
 function createInitialDb(): DemoDbState {

@@ -760,24 +760,4 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     ]);
     expect(summary.specification?.pending_approval_note).toMatch(/Water saved is excluded/i);
   });
-
-  it('includes valid MySQL / phpMyAdmin schema and seed SQL files matching the 8 tables', () => {
-    const mysqlSchema = fs.readFileSync(path.join(process.cwd(), 'db', 'schema.mysql.sql'), 'utf8');
-    const mysqlSeed = fs.readFileSync(path.join(process.cwd(), 'db', 'seed.mysql.sql'), 'utf8');
-
-    for (const table of [
-      'accounts',
-      'products',
-      'inventory',
-      'transactions',
-      'transaction_details',
-      'digital_receipts',
-      'eco_impact',
-      'inventory_adjustments',
-    ]) {
-      expect(mysqlSchema).toContain(`CREATE TABLE IF NOT EXISTS \`${table}\``);
-      expect(mysqlSeed).toContain(`INSERT INTO \`${table}\``);
-    }
-    expect(mysqlSchema).toContain('ENGINE=InnoDB');
-  });
 });
