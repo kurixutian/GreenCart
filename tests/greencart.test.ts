@@ -86,8 +86,8 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     db.close();
   });
 
-  it('registers a customer with a salted scrypt hash and blocks admin self-registration', () => {
-    const created = service.registerCustomer({
+  it('registers a customer with a salted scrypt hash and blocks admin self-registration', async () => {
+    const created = await service.registerCustomer({
       username: 'elena_reyes',
       password: 'Password123',
       full_name: 'Elena Reyes',
@@ -103,61 +103,69 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     expect(stored.password_hash).not.toContain('Password123');
     expect(stored.account_type).toBe('customer');
 
-    expect(() =>
+    await expect(
       service.registerCustomer({
         username: 'fake_admin',
         password: 'Password123',
         full_name: 'Fake Admin',
         account_type: 'admin',
       })
-    ).toThrowError(AppError);
+    ).rejects.toThrowError(AppError);
   });
 
-  it('rejects bad passwords and enforces role guards on admin operations', () => {
-    expect(() => service.login('maria_santos', 'wrong-pass')).toThrowError(/Invalid username or password/);
+  it('rejects bad passwords and enforces role guards on admin operations', async () => {
+    await expect(service.login('maria_santos', 'wrong-pass')).rejects.toThrowError(
+      /Invalid username or password/
+    );
 
-    const maria = service.login('maria_santos', 'customer123');
+    const maria = await service.login('maria_santos', 'customer123');
     expect(maria.account_type).toBe('customer');
 
-    expect(() =>
+    await expect(
       service.upsertProduct(maria.account_type, {
         product_name: 'Unauthorized Item',
         description: 'Should fail',
         price: 99,
         quantity: 10,
       })
-    ).toThrowError(/Only administrators/);
+    ).rejects.toThrowError(/Only administrators/);
 
-    expect(() => service.adjustStock(maria.account_type, 1, 5)).toThrowError(/Only administrators/);
-    expect(() => service.getDatabaseSnapshot(maria)).toThrowError(/Administrator access required/);
+    await expect(service.adjustStock(maria.account_type, 1, 5)).rejects.toThrowError(
+      /Only administrators/
+    );
+    await expect(service.getDatabaseSnapshot(maria)).rejects.toThrowError(
+      /Administrator access required/
+    );
   });
 
-  it('searches catalog, synchronizes stock_status, and rejects negative stock', () => {
-    const bamboo = service.listCatalog('bamboo');
+  it('searches catalog, synchronizes stock_status, and rejects negative stock', async () => {
+    const bamboo = await service.listCatalog('bamboo');
     expect(bamboo.length).toBe(2);
 
-    const admin = service.login('admin_qcu', 'admin123');
+    const admin = await service.login('admin_qcu', 'admin123');
     // Product 1 starts at 34 ('In Stock'); adjust by -26 -> 8 ('Low Stock')
-    const low = service.adjustStock(admin.account_type, 1, -26);
+    const low = await service.adjustStock(admin.account_type, 1, -26);
     expect(low.quantity).toBe(8);
     expect(low.stock_status).toBe('Low Stock');
 
     // Adjust to 0 -> 'Out of Stock'
-    const zero = service.adjustStock(admin.account_type, 1, -8);
+    const zero = await service.adjustStock(admin.account_type, 1, -8);
     expect(zero.quantity).toBe(0);
     expect(zero.stock_status).toBe('Out of Stock');
 
     // Negative stock rejected
-    expect(() => service.adjustStock(admin.account_type, 1, -1)).toThrowError(/cannot become negative/);
+    await expect(service.adjustStock(admin.account_type, 1, -1)).rejects.toThrowError(
+      /cannot become negative/
+    );
   });
 
-  it('ignores client-tampered prices/totals and deducts stock atomically across Customer & POS sales', () => {
-    const maria = service.login('maria_santos', 'customer123');
-    const admin = service.login('admin_qcu', 'admin123');
+  it('ignores client-tampered prices/totals and deducts stock atomically across Customer & POS sales', async () => {
+    const maria = await service.login('maria_santos', 'customer123');
+    const admin = await service.login('admin_qcu', 'admin123');
 
     // Product 1 is 145.00 (qty 34), Product 2 is 220.00 (qty 18)
     // Tamper client payload with bogus prices and total_amount = 1.00
-    const customerReceipt = service.processSale(maria, {
+    const customerReceipt = await service.processSale(maria, {
       checkoutToken: 'tok-customer-1',
       total_amount: 1.0,
       lineItems: [
@@ -172,7 +180,7 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     expect(customerReceipt.carbon_reduction).toBe(5.25); // 1.5 * 3.5
 
     // Admin POS sale assigned to walkin_customer (account_id 3)
-    const posReceipt = service.processSale(admin, {
+    const posReceipt = await service.processSale(admin, {
       account_id: 3,
       checkoutToken: 'tok-pos-1',
       lineItems: [{ product_id: 1, quantity: 3 }],
@@ -187,14 +195,14 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     expect(invRow.quantity).toBe(29); // 34 - 2 - 3
   });
 
-  it('rolls back entire transaction on insufficient stock, mid-sale failure, and blocks duplicate submissions', () => {
-    const maria = service.login('maria_santos', 'customer123');
+  it('rolls back entire transaction on insufficient stock, mid-sale failure, and blocks duplicate submissions', async () => {
+    const maria = await service.login('maria_santos', 'customer123');
     const beforeTxCount = (
       db.prepare('SELECT COUNT(*) AS cnt FROM transactions').get() as { cnt: number }
     ).cnt;
 
     // Product 7 has 0 stock
-    expect(() =>
+    await expect(
       service.processSale(maria, {
         checkoutToken: 'tok-fail-stock',
         lineItems: [
@@ -202,10 +210,10 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
           { product_id: 7, quantity: 1 },
         ],
       })
-    ).toThrowError(/Insufficient stock/);
+    ).rejects.toThrowError(/Insufficient stock/);
 
     // Mid-transaction failure hook after inserts
-    expect(() =>
+    await expect(
       service.processSale(
         maria,
         {
@@ -216,7 +224,7 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
           throw new Error('Simulated crash before commit');
         }
       )
-    ).toThrowError('Simulated crash before commit');
+    ).rejects.toThrowError('Simulated crash before commit');
 
     const afterTxCount = (
       db.prepare('SELECT COUNT(*) AS cnt FROM transactions').get() as { cnt: number }
@@ -229,38 +237,46 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     expect(prod1Stock).toBe(34); // completely untouched
 
     // Duplicate checkoutToken protection
-    service.processSale(maria, {
+    await service.processSale(maria, {
       checkoutToken: 'tok-once',
       lineItems: [{ product_id: 1, quantity: 1 }],
     });
-    expect(() =>
+    await expect(
       service.processSale(maria, {
         checkoutToken: 'tok-once',
         lineItems: [{ product_id: 1, quantity: 1 }],
       })
-    ).toThrowError(/Duplicate sale submission blocked/);
+    ).rejects.toThrowError(/Duplicate sale submission blocked/);
   });
 
   it('enforces receipt lookup, local QR generation, cross-customer ownership, and Eco-Impact reconciliation', async () => {
-    const maria = service.login('maria_santos', 'customer123');
-    const juan = service.login('juan_delacruz', 'customer123');
+    const maria = await service.login('maria_santos', 'customer123');
+    const juan = await service.login('juan_delacruz', 'customer123');
 
     // Valid token lookup & local QR image generation
-    const mariaReceipt = service.getReceiptByToken('GC-7D30B59E42A1', maria);
+    const mariaReceipt = await service.getReceiptByToken('GC-7D30B59E42A1', maria);
     expect(mariaReceipt.transaction_id).toBe(1002);
     const qrDataUrl = await QRCode.toDataURL(`https://greencart.local/?receipt=${mariaReceipt.qr_code}`);
     expect(qrDataUrl.startsWith('data:image/png;base64,')).toBe(true);
 
     // Invalid token discloses nothing
-    expect(() => service.getReceiptByToken('GC-DEADBEEF0000', maria)).toThrowError(/No digital receipt/);
+    await expect(service.getReceiptByToken('GC-DEADBEEF0000', maria)).rejects.toThrowError(
+      /No digital receipt/
+    );
 
     // Customer A (Maria) cannot access Customer B (Juan)'s history or private receipt
-    expect(() => service.getCustomerHistory(maria, juan.account_id)).toThrowError(/Access denied/);
-    expect(() => service.getReceiptByTransactionId(1003, maria)).toThrowError(/Access denied/);
-    expect(() => service.getReceiptByToken('GC-9F28E14C66B9', maria)).toThrowError(/Access denied/);
+    await expect(service.getCustomerHistory(maria, juan.account_id)).rejects.toThrowError(
+      /Access denied/
+    );
+    await expect(service.getReceiptByTransactionId(1003, maria)).rejects.toThrowError(
+      /Access denied/
+    );
+    await expect(service.getReceiptByToken('GC-9F28E14C66B9', maria)).rejects.toThrowError(
+      /Access denied/
+    );
 
     // Eco-Impact reconciliation against DB aggregates
-    const personalSummary = service.getEcoImpactSummary(maria, 'personal');
+    const personalSummary = await service.getEcoImpactSummary(maria, 'personal');
     const dbPersonal = db
       .prepare(
         `SELECT COUNT(*) AS cnt, SUM(paper_saved) AS paper, SUM(carbon_reduction) AS carbon
@@ -319,8 +335,8 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     expect(okSaleRes.statusCode).toBe(201);
   });
 
-  it('rejects expired signed session tokens', () => {
-    const maria = service.login('maria_santos', 'customer123');
+  it('rejects expired signed session tokens', async () => {
+    const maria = await service.login('maria_santos', 'customer123');
     const validToken = signSessionToken(maria, 'unit-secret', 60_000);
     expect(verifySessionToken(validToken, 'unit-secret')?.username).toBe('maria_santos');
 
@@ -350,11 +366,11 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     expect(refreshedCookies.some((c) => c.startsWith('gc_csrf='))).toBe(true);
   });
 
-  it('supports Phase 1 category filtering, product image metadata, and safe admin image uploads', () => {
-    const maria = service.login('maria_santos', 'customer123');
-    const admin = service.login('admin_qcu', 'admin123');
+  it('supports Phase 1 category filtering, product image metadata, and safe admin image uploads', async () => {
+    const maria = await service.login('maria_santos', 'customer123');
+    const admin = await service.login('admin_qcu', 'admin123');
 
-    const drinkware = service.listCatalog('', 'ALL', 'Drinkware');
+    const drinkware = await service.listCatalog('', 'ALL', 'Drinkware');
     expect(drinkware.length).toBe(1);
     expect(drinkware[0].product_name).toContain('Tumbler');
     expect(drinkware[0].image_url).toBe('/images/products/product-3.svg');
@@ -401,7 +417,7 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     expect(uploaded.image_url).toMatch(/^\/uploads\/products\/.+\.png$/);
 
     try {
-      const created = service.upsertProduct(admin.account_type, {
+      const created = await service.upsertProduct(admin.account_type, {
         product_name: 'Stainless Straw Kit',
         description: 'Reusable metal straws with cleaning brush.',
         price: 120,
@@ -411,7 +427,7 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
       });
       expect(created.category).toBe('Drinkware');
       expect(created.image_url).toBe(uploaded.image_url);
-      expect(service.listCatalog('', 'ALL', 'Drinkware').length).toBe(2);
+      expect((await service.listCatalog('', 'ALL', 'Drinkware')).length).toBe(2);
     } finally {
       const diskPath = path.join(process.cwd(), 'public', uploaded.image_url);
       if (fs.existsSync(diskPath)) {
@@ -420,13 +436,13 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     }
   });
 
-  it('supports Phase 2 optional unique SKUs, SKU search, and duplicate SKU rejection', () => {
-    const admin = service.login('admin_qcu', 'admin123');
-    const bySku = service.listCatalog('ECO-103');
+  it('supports Phase 2 optional unique SKUs, SKU search, and duplicate SKU rejection', async () => {
+    const admin = await service.login('admin_qcu', 'admin123');
+    const bySku = await service.listCatalog('ECO-103');
     expect(bySku.length).toBe(1);
     expect(bySku[0].sku).toBe('ECO-103');
 
-    const created = service.upsertProduct(admin.account_type, {
+    const created = await service.upsertProduct(admin.account_type, {
       product_name: 'Compostable Produce Bags',
       description: 'Roll of 50 plant-starch produce bags.',
       price: 160,
@@ -437,7 +453,7 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     expect(created.sku).toBe('ECO-109');
 
     // Duplicate SKU rejected with 409
-    expect(() =>
+    await expect(
       service.upsertProduct(admin.account_type, {
         product_name: 'Duplicate SKU Item',
         description: 'Should fail on duplicate SKU.',
@@ -445,14 +461,14 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
         quantity: 5,
         sku: 'ECO-109',
       })
-    ).toThrowError(/already assigned/);
+    ).rejects.toThrowError(/already assigned/);
   });
 
-  it('supports Phase 3 per-product reorder thresholds and adjustment audit logs', () => {
-    const admin = service.login('admin_qcu', 'admin123');
-    const maria = service.login('maria_santos', 'customer123');
+  it('supports Phase 3 per-product reorder thresholds and adjustment audit logs', async () => {
+    const admin = await service.login('admin_qcu', 'admin123');
+    const maria = await service.login('maria_santos', 'customer123');
 
-    const created = service.upsertProduct(admin, {
+    const created = await service.upsertProduct(admin, {
       product_name: 'Refillable Dish Soap Pouch',
       description: 'Concentrated botanical dishwashing refill.',
       price: 150,
@@ -464,7 +480,7 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     expect(created.reorder_level).toBe(3);
     expect(created.stock_status).toBe('In Stock');
 
-    const adjusted = service.adjustStock(
+    const adjusted = await service.adjustStock(
       admin,
       created.product_id,
       -3,
@@ -473,7 +489,7 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     expect(adjusted.quantity).toBe(2);
     expect(adjusted.stock_status).toBe('Low Stock');
 
-    const logs = service.listInventoryAdjustments(admin.account_type, created.product_id);
+    const logs = await service.listInventoryAdjustments(admin.account_type, created.product_id);
     expect(logs.length).toBe(2);
     expect(logs[0].delta).toBe(-3);
     expect(logs[0].previous_qty).toBe(5);
@@ -482,16 +498,16 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     expect(logs[0].actor_name).toBe('Store Administrator');
     expect(logs[1].reason).toBe('Initial stock entry');
 
-    expect(() => service.listInventoryAdjustments(maria.account_type)).toThrowError(
+    await expect(service.listInventoryAdjustments(maria.account_type)).rejects.toThrowError(
       /Only administrators/
     );
   });
 
   it('archives products without breaking historical receipts and blocks new sales', async () => {
-    const admin = service.login('admin_qcu', 'admin123');
-    const maria = service.login('maria_santos', 'customer123');
+    const admin = await service.login('admin_qcu', 'admin123');
+    const maria = await service.login('maria_santos', 'customer123');
 
-    const item = service.upsertProduct(admin, {
+    const item = await service.upsertProduct(admin, {
       product_name: 'Seasonal Bamboo Straws',
       description: 'Limited-edition portable straw set.',
       price: 90,
@@ -501,18 +517,20 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
       sku: 'ECO-302',
     });
 
-    const receipt = service.processSale(maria, {
+    const receipt = await service.processSale(maria, {
       checkoutToken: 'archive-history-check-1',
       lineItems: [{ product_id: item.product_id, quantity: 2 }],
     });
 
-    const archived = service.setProductArchived(admin, item.product_id, true);
+    const archived = await service.setProductArchived(admin, item.product_id, true);
     expect(archived.is_archived).toBe(1);
 
     // Excluded from active catalog, retained when includeArchived=true
-    expect(service.listCatalog().some((p) => p.product_id === item.product_id)).toBe(false);
+    expect((await service.listCatalog()).some((p) => p.product_id === item.product_id)).toBe(false);
     expect(
-      service.listCatalog('', 'ALL', 'ALL', true).some((p) => p.product_id === item.product_id)
+      (await service.listCatalog('', 'ALL', 'ALL', true)).some(
+        (p) => p.product_id === item.product_id
+      )
     ).toBe(true);
 
     // Customers cannot includeArchived=1 via HTTP API
@@ -534,24 +552,24 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     expect(itemsList.some((p) => p.product_id === item.product_id)).toBe(false);
 
     // New checkout rejects archived SKU while historical receipt remains intact
-    expect(() =>
+    await expect(
       service.processSale(maria, {
         checkoutToken: 'archive-blocked-check-2',
         lineItems: [{ product_id: item.product_id, quantity: 1 }],
       })
-    ).toThrowError(/archived and no longer available/i);
+    ).rejects.toThrowError(/archived and no longer available/i);
 
-    const historicalReceipt = service.getReceiptByToken(receipt.qr_code, maria);
+    const historicalReceipt = await service.getReceiptByToken(receipt.qr_code, maria);
     expect(historicalReceipt.items[0].product_name).toBe('Seasonal Bamboo Straws');
   });
 
   it('supports Phase 4 searchable admin transactions, CSV export escaping, and role guards', async () => {
-    const admin = service.login('admin_qcu', 'admin123');
-    const maria = service.login('maria_santos', 'customer123');
+    const admin = await service.login('admin_qcu', 'admin123');
+    const maria = await service.login('maria_santos', 'customer123');
     const middleware = createApiMiddleware(db, 'test-secret');
 
     // Filter by customer and sort ascending/highest
-    const mariaTxs = service.searchTransactions(admin.account_type, {
+    const mariaTxs = await service.searchTransactions(admin.account_type, {
       customerAccountId: maria.account_id,
       sort: 'highest',
     });
@@ -559,14 +577,14 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     expect(mariaTxs[0].total_amount).toBeGreaterThanOrEqual(mariaTxs[1].total_amount);
 
     // Search by seeded transaction ID or QR prefix
-    const byId = service.searchTransactions(admin.account_type, { search: '1001' });
+    const byId = await service.searchTransactions(admin.account_type, { search: '1001' });
     expect(byId.length).toBe(1);
     expect(byId[0].transaction_id).toBe(1001);
 
     // Date filter validation rejects malformed dates
-    expect(() =>
+    await expect(
       service.searchTransactions(admin.account_type, { dateFrom: '2026/11/01' })
-    ).toThrowError(/Invalid dateFrom/);
+    ).rejects.toThrowError(/Invalid dateFrom/);
 
     // Customer cannot query all store transactions or CSV export via HTTP (403)
     const custLogin = await invokeMiddleware(middleware, {
@@ -593,17 +611,17 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     expect(forbiddenCsv.statusCode).toBe(403);
 
     // Register a formula-prefixed customer name to verify CSV formula neutralization
-    const riskyCustomer = service.registerCustomer({
+    const riskyCustomer = await service.registerCustomer({
       username: 'formula_user',
       password: 'password123',
       full_name: '=CMD|calc',
     });
-    service.processSale(riskyCustomer, {
+    await service.processSale(riskyCustomer, {
       checkoutToken: 'csv-escape-check-1',
       lineItems: [{ product_id: 1, quantity: 1 }],
     });
 
-    const csv = service.exportTransactionsCsv(admin.account_type, {
+    const csv = await service.exportTransactionsCsv(admin.account_type, {
       customerAccountId: riskyCustomer.account_id,
     });
     expect(csv).toContain("'=CMD|calc");
@@ -681,12 +699,16 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     });
     expect(passOk.statusCode).toBe(200);
 
-    expect(() => service.login('maria_santos', 'customer123')).toThrowError(/Invalid username/);
-    expect(service.login('maria_santos', 'newpassword99').full_name).toBe('Maria Santos-Reyes');
+    await expect(service.login('maria_santos', 'customer123')).rejects.toThrowError(
+      /Invalid username/
+    );
+    expect((await service.login('maria_santos', 'newpassword99')).full_name).toBe(
+      'Maria Santos-Reyes'
+    );
   });
 
-  it('verifies Phase 5 Eco-Impact specification, boundary calculations, seed reconciliation, and pending-metric exclusion', () => {
-    const admin = service.login('admin_qcu', 'admin123');
+  it('verifies Phase 5 Eco-Impact specification, boundary calculations, seed reconciliation, and pending-metric exclusion', async () => {
+    const admin = await service.login('admin_qcu', 'admin123');
 
     // Boundary and rounding tests against ECO_IMPACT_SPEC constants
     expect(calculateEcoMetrics(0)).toEqual({ paper_saved: 0, carbon_reduction: 0 });
@@ -729,7 +751,7 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     expect(ecoColumns).toEqual(['impact_id', 'transaction_id', 'paper_saved', 'carbon_reduction']);
 
     // Summary exposes traceable specification metadata & estimate flags
-    const summary = service.getEcoImpactSummary(admin, 'store');
+    const summary = await service.getEcoImpactSummary(admin, 'store');
     expect(summary.specification).toEqual(ECO_IMPACT_SPEC);
     expect(summary.specification?.metrics.map((m) => m.key)).toEqual([
       'paper_saved',
@@ -737,5 +759,25 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
       'paperless_count',
     ]);
     expect(summary.specification?.pending_approval_note).toMatch(/Water saved is excluded/i);
+  });
+
+  it('includes valid MySQL / phpMyAdmin schema and seed SQL files matching the 8 tables', () => {
+    const mysqlSchema = fs.readFileSync(path.join(process.cwd(), 'db', 'schema.mysql.sql'), 'utf8');
+    const mysqlSeed = fs.readFileSync(path.join(process.cwd(), 'db', 'seed.mysql.sql'), 'utf8');
+
+    for (const table of [
+      'accounts',
+      'products',
+      'inventory',
+      'transactions',
+      'transaction_details',
+      'digital_receipts',
+      'eco_impact',
+      'inventory_adjustments',
+    ]) {
+      expect(mysqlSchema).toContain(`CREATE TABLE IF NOT EXISTS \`${table}\``);
+      expect(mysqlSeed).toContain(`INSERT INTO \`${table}\``);
+    }
+    expect(mysqlSchema).toContain('ENGINE=InnoDB');
   });
 });

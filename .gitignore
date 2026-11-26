@@ -1,6 +1,7 @@
 node_modules/
 dist/
 data/*.sqlite
+.env
 *.log
 test-results/
 playwright-report/

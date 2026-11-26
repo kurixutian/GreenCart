@@ -2,7 +2,7 @@
 
 Full-stack TypeScript + React + Tailwind CSS v4 + Node 24 (`node:sqlite`) web application implementing the canonical 7-entity GreenCart ERD.
 
-## Quick Start
+## Quick Start (SQLite Default)
 
 ```bash
 npm install
@@ -10,6 +10,17 @@ npm run dev
 ```
 
 Open the printed local Vite URL in your browser.
+
+### Presentation Setup with XAMPP / MySQL / phpMyAdmin
+1. Start **Apache** and **MySQL** in **XAMPP Control Panel**.
+2. Copy `.env.example` to `.env` (defaults to `DB_CLIENT=mysql`, `DB_HOST=127.0.0.1`, `DB_PORT=3306`, `DB_USER=root`, `DB_PASSWORD=`, `DB_NAME=greencart`).
+3. Optional: import `db/schema.mysql.sql` and `db/seed.mysql.sql` in **phpMyAdmin** (`http://localhost/phpmyadmin`), or let GreenCart auto-create and seed the `greencart` database on startup.
+4. Build and run the presentation server:
+```bash
+npm run build
+npm start
+```
+All purchases, inventory changes, and audit logs will appear live inside phpMyAdmin under the `greencart` database.
 
 ### Demo Accounts
 - **Customer:** `maria_santos` / `customer123`

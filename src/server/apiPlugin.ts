@@ -3,7 +3,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Connect, Plugin } from 'vite';
 import { signSessionToken, verifySessionToken } from './crypto.ts';
-import { openDatabase, resetDatabase } from './db.ts';
+import {
+  createSqliteClient,
+  openConfiguredDbClient,
+  type DbClient,
+} from './dbClient.ts';
 import { AppError, GreenCartService } from './service.ts';
 import type {
   AdminTransactionFilter,
@@ -102,10 +106,14 @@ function parseTransactionFilters(url: URL): AdminTransactionFilter {
 }
 
 export function createApiMiddleware(
-  db: DatabaseSync,
+  dbOrClient: DbClient | DatabaseSync,
   secret: string = resolveSessionSecret()
 ): Connect.NextHandleFunction {
-  const service = new GreenCartService(db);
+  const dbClient: DbClient =
+    typeof (dbOrClient as DbClient).queryAll === 'function'
+      ? (dbOrClient as DbClient)
+      : createSqliteClient(dbOrClient as DatabaseSync);
+  const service = new GreenCartService(dbClient);
 
   return async (req, res, next) => {
     const urlStr = req.url || '/';
@@ -144,7 +152,9 @@ export function createApiMiddleware(
     try {
       // GET /api/auth/me (refreshes rolling 30-minute session when authenticated)
       if (method === 'GET' && pathname === '/api/auth/me') {
-        const currentAccount = sessionUser ? service.getAccountById(sessionUser.account_id) : null;
+        const currentAccount = sessionUser
+          ? await service.getAccountById(sessionUser.account_id)
+          : null;
         if (currentAccount) {
           const refreshedToken = signSessionToken(currentAccount, secret);
           const refreshedCsrf = createCsrfToken(refreshedToken, secret);
@@ -163,7 +173,7 @@ export function createApiMiddleware(
         const actor = requireAuth();
         requireCsrf();
         const body = await readJsonBody<{ full_name?: string; account_id?: number }>(req);
-        const updatedUser = service.updateAccountProfile(actor, {
+        const updatedUser = await service.updateAccountProfile(actor, {
           full_name: body.full_name || '',
           account_id: body.account_id,
         });
@@ -185,7 +195,7 @@ export function createApiMiddleware(
           newPassword?: string;
           account_id?: number;
         }>(req);
-        service.changePassword(actor, {
+        await service.changePassword(actor, {
           currentPassword: body.currentPassword || '',
           newPassword: body.newPassword || '',
           account_id: body.account_id,
@@ -197,7 +207,7 @@ export function createApiMiddleware(
       // POST /api/auth/login
       if (method === 'POST' && pathname === '/api/auth/login') {
         const body = await readJsonBody<{ username?: string; password?: string }>(req);
-        const user = service.login(body.username || '', body.password || '');
+        const user = await service.login(body.username || '', body.password || '');
         const token = signSessionToken(user, secret);
         const csrfToken = createCsrfToken(token, secret);
         sendJson(res, 200, { user, csrfToken }, [
@@ -215,7 +225,7 @@ export function createApiMiddleware(
           full_name?: string;
           account_type?: string;
         }>(req);
-        const user = service.registerCustomer({
+        const user = await service.registerCustomer({
           username: body.username || '',
           password: body.password || '',
           full_name: body.full_name || '',
@@ -250,7 +260,7 @@ export function createApiMiddleware(
         const category = url.searchParams.get('category') || 'ALL';
         const includeArchived =
           actor.account_type === 'admin' && url.searchParams.get('includeArchived') === '1';
-        const items = service.listCatalog(search, status, category, includeArchived);
+        const items = await service.listCatalog(search, status, category, includeArchived);
         sendJson(res, 200, { items });
         return;
       }
@@ -258,7 +268,7 @@ export function createApiMiddleware(
       // GET /api/customers (admin only for POS selector)
       if (method === 'GET' && pathname === '/api/customers') {
         const actor = requireAuth();
-        const customers = service.listCustomerAccounts(actor.account_type);
+        const customers = await service.listCustomerAccounts(actor.account_type);
         sendJson(res, 200, { customers });
         return;
       }
@@ -296,7 +306,7 @@ export function createApiMiddleware(
           image_url?: string | null;
           sku?: string | null;
         }>(req);
-        const item = service.upsertProduct(actor, {
+        const item = await service.upsertProduct(actor, {
           product_name: body.product_name || '',
           description: body.description || '',
           price: Number(body.price),
@@ -329,7 +339,7 @@ export function createApiMiddleware(
           sku?: string | null;
           adjustment_reason?: string;
         }>(req);
-        const item = service.upsertProduct(actor, {
+        const item = await service.upsertProduct(actor, {
           product_id: productId,
           product_name: body.product_name || '',
           description: body.description || '',
@@ -353,7 +363,7 @@ export function createApiMiddleware(
         requireCsrf();
         const productId = Number(archiveProdMatch[1]);
         const body = await readJsonBody<{ is_archived?: boolean }>(req);
-        const item = service.setProductArchived(actor, productId, Boolean(body.is_archived));
+        const item = await service.setProductArchived(actor, productId, Boolean(body.is_archived));
         sendJson(res, 200, { item });
         return;
       }
@@ -365,7 +375,11 @@ export function createApiMiddleware(
         const productId = productIdParam ? Number(productIdParam) : undefined;
         const limitParam = url.searchParams.get('limit');
         const limit = limitParam ? Number(limitParam) : 100;
-        const adjustments = service.listInventoryAdjustments(actor.account_type, productId, limit);
+        const adjustments = await service.listInventoryAdjustments(
+          actor.account_type,
+          productId,
+          limit
+        );
         sendJson(res, 200, { adjustments });
         return;
       }
@@ -377,7 +391,7 @@ export function createApiMiddleware(
         requireCsrf();
         const productId = Number(adjustStockMatch[1]);
         const body = await readJsonBody<{ delta?: number; reason?: string }>(req);
-        const item = service.adjustStock(
+        const item = await service.adjustStock(
           actor,
           productId,
           Number(body.delta),
@@ -392,7 +406,7 @@ export function createApiMiddleware(
         const actor = requireAuth();
         requireCsrf();
         const body = await readJsonBody<SaleRequestPayload>(req);
-        const receipt = service.processSale(actor, body);
+        const receipt = await service.processSale(actor, body);
         sendJson(res, 201, { receipt });
         return;
       }
@@ -402,7 +416,7 @@ export function createApiMiddleware(
       if (method === 'GET' && receiptTokenMatch) {
         const actor = requireAuth();
         const token = decodeURIComponent(receiptTokenMatch[1]);
-        const receipt = service.getReceiptByToken(token, actor);
+        const receipt = await service.getReceiptByToken(token, actor);
         sendJson(res, 200, { receipt });
         return;
       }
@@ -412,7 +426,7 @@ export function createApiMiddleware(
       if (method === 'GET' && receiptTxMatch) {
         const actor = requireAuth();
         const txId = Number(receiptTxMatch[1]);
-        const receipt = service.getReceiptByTransactionId(txId, actor);
+        const receipt = await service.getReceiptByTransactionId(txId, actor);
         sendJson(res, 200, { receipt });
         return;
       }
@@ -420,7 +434,7 @@ export function createApiMiddleware(
       // GET /api/transactions (admin searchable/filterable/sortable transaction list)
       if (method === 'GET' && pathname === '/api/transactions') {
         const actor = requireAuth();
-        const transactions = service.searchTransactions(
+        const transactions = await service.searchTransactions(
           actor.account_type,
           parseTransactionFilters(url)
         );
@@ -431,7 +445,7 @@ export function createApiMiddleware(
       // GET /api/transactions/export.csv (admin CSV export)
       if (method === 'GET' && pathname === '/api/transactions/export.csv') {
         const actor = requireAuth();
-        const csv = service.exportTransactionsCsv(
+        const csv = await service.exportTransactionsCsv(
           actor.account_type,
           parseTransactionFilters(url)
         );
@@ -450,7 +464,7 @@ export function createApiMiddleware(
         const requestedAccountId = requestedAccountIdParam
           ? Number(requestedAccountIdParam)
           : undefined;
-        const history = service.getCustomerHistory(actor, requestedAccountId);
+        const history = await service.getCustomerHistory(actor, requestedAccountId);
         sendJson(res, 200, { history });
         return;
       }
@@ -460,7 +474,7 @@ export function createApiMiddleware(
         const actor = requireAuth();
         const rawScope = url.searchParams.get('scope');
         const scope: EcoScope = rawScope === 'store' ? 'store' : 'personal';
-        const summary = service.getEcoImpactSummary(actor, scope);
+        const summary = await service.getEcoImpactSummary(actor, scope);
         sendJson(res, 200, { summary });
         return;
       }
@@ -468,7 +482,7 @@ export function createApiMiddleware(
       // GET /api/db/snapshot (admin inspector)
       if (method === 'GET' && pathname === '/api/db/snapshot') {
         const actor = requireAuth();
-        const snapshot = service.getDatabaseSnapshot(actor);
+        const snapshot = await service.getDatabaseSnapshot(actor);
         sendJson(res, 200, { snapshot });
         return;
       }
@@ -480,7 +494,7 @@ export function createApiMiddleware(
         if (actor.account_type !== 'admin') {
           throw new AppError(403, 'Only administrators can reset the database.');
         }
-        resetDatabase(db);
+        await dbClient.resetToSeed();
         sendJson(res, 200, { ok: true });
         return;
       }
@@ -498,21 +512,35 @@ export function createApiMiddleware(
 }
 
 export function greenCartApiPlugin(): Plugin {
-  let db: DatabaseSync | null = null;
-  const ensureMiddleware = () => {
-    if (!db) {
-      db = openDatabase();
+  let middlewarePromise: Promise<Connect.NextHandleFunction> | null = null;
+  const ensureMiddleware = (): Promise<Connect.NextHandleFunction> => {
+    if (!middlewarePromise) {
+      middlewarePromise = openConfiguredDbClient().then((client) => createApiMiddleware(client));
     }
-    return createApiMiddleware(db);
+    return middlewarePromise;
   };
 
   return {
     name: 'greencart-api-plugin',
     configureServer(server) {
-      server.middlewares.use(ensureMiddleware());
+      server.middlewares.use(async (req, res, next) => {
+        try {
+          const mw = await ensureMiddleware();
+          mw(req, res, next);
+        } catch (err) {
+          next(err);
+        }
+      });
     },
     configurePreviewServer(server) {
-      server.middlewares.use(ensureMiddleware());
+      server.middlewares.use(async (req, res, next) => {
+        try {
+          const mw = await ensureMiddleware();
+          mw(req, res, next);
+        } catch (err) {
+          next(err);
+        }
+      });
     },
   };
 }
