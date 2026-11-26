@@ -35,7 +35,7 @@ export function EcoImpactView({
             <Leaf className="h-6 w-6" />
           </div>
           <div>
-            <h2 className="text-xl font-extrabold text-slate-900">Eco-Impact Dashboard</h2>
+            <h1 className="text-xl font-extrabold text-slate-900">Eco-Impact Dashboard</h1>
             <p className="text-xs text-slate-600">
               Reconciled from persisted <span className="font-mono">eco_impact</span> and{' '}
               <span className="font-mono">digital_receipts</span> records.
@@ -48,7 +48,7 @@ export function EcoImpactView({
             <button
               type="button"
               onClick={() => onChangeScope('personal')}
-              className={`rounded-lg px-4 py-1.5 text-xs font-semibold transition ${
+              className={`min-h-11 rounded-lg px-4 py-1.5 text-xs font-semibold transition sm:min-h-9 ${
                 scope === 'personal'
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -59,7 +59,7 @@ export function EcoImpactView({
             <button
               type="button"
               onClick={() => onChangeScope('store')}
-              className={`rounded-lg px-4 py-1.5 text-xs font-semibold transition ${
+              className={`min-h-11 rounded-lg px-4 py-1.5 text-xs font-semibold transition sm:min-h-9 ${
                 scope === 'store'
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -90,12 +90,12 @@ export function EcoImpactView({
           <p className="mt-1 text-xs text-slate-600">thermal receipt sheets estimated avoided</p>
         </div>
 
-        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-white to-emerald-50/70 p-6 shadow-sm">
+        <div className="rounded-2xl border border-brand-200 bg-gradient-to-br from-white to-brand-50/70 p-6 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">
+            <span className="text-xs font-bold uppercase tracking-wider text-brand-700">
               Carbon Reduction (Estimate)
             </span>
-            <CloudOff className="h-5 w-5 text-emerald-600" />
+            <CloudOff className="h-5 w-5 text-brand-600" />
           </div>
           <p className="mt-3 font-mono text-3xl font-extrabold text-slate-900 tabular-nums">
             {summary ? summary.total_carbon_reduction.toFixed(2) : '0.00'}
@@ -127,10 +127,17 @@ export function EcoImpactView({
             {paperSaved.toFixed(2)} / {nextMilestone} sheets ({progressPct}%)
           </span>
         </div>
-        <div className="mt-2.5 h-3 w-full overflow-hidden rounded-full bg-brand-100">
+        <div
+          role="progressbar"
+          aria-label="Cumulative paper-saving milestone"
+          aria-valuenow={progressPct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          className="mt-2.5 h-3 w-full overflow-hidden rounded-full bg-brand-100"
+        >
           <div
-            className="h-full rounded-full bg-brand-600 transition-all duration-300"
-            style={{ width: `${progressPct}%` }}
+            className="h-full w-full origin-left rounded-full bg-brand-600 transition-transform duration-300 ease-out"
+            style={{ transform: `scaleX(${progressPct / 100})` }}
           />
         </div>
       </div>
@@ -199,7 +206,7 @@ export function EcoImpactView({
                         <button
                           type="button"
                           onClick={() => onInspectToken(row.qr_code)}
-                          className="ml-2 inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600 hover:bg-brand-100 hover:text-brand-800"
+                          className="ml-2 inline-flex min-h-11 items-center gap-1 rounded bg-slate-100 px-2 py-1 font-mono text-[10px] text-slate-600 hover:bg-brand-100 hover:text-brand-800 sm:min-h-7 sm:px-1.5 sm:py-0.5"
                         >
                           <QrCode className="h-3 w-3" />
                           {row.qr_code}
@@ -216,7 +223,7 @@ export function EcoImpactView({
                     <td className="px-4 py-3.5 text-right font-mono text-xs font-semibold text-brand-700 tabular-nums">
                       {row.paper_saved.toFixed(2)} sh
                     </td>
-                    <td className="px-5 py-3.5 text-right font-mono text-xs font-semibold text-emerald-700 tabular-nums">
+                    <td className="px-5 py-3.5 text-right font-mono text-xs font-semibold text-brand-700 tabular-nums">
                       {row.carbon_reduction.toFixed(2)} g
                     </td>
                   </tr>

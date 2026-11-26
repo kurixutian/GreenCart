@@ -15,3 +15,29 @@
   --color-brand-800: #3e561f;
   --color-brand-900: #35491e;
 }
+
+@layer base {
+  ::placeholder {
+    color: var(--color-slate-500);
+    opacity: 1;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+
+    .transition-transform {
+      transition-property: none !important;
+    }
+  }
+}

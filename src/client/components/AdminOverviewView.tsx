@@ -47,27 +47,30 @@ export function AdminOverviewView({
     let cancelled = false;
     setLoadingTx(true);
     setTxError(null);
-    api
-      .getAdminTransactions({
-        search: txSearch.trim() || undefined,
-        customerAccountId: txCustomerId === 'ALL' ? undefined : Number(txCustomerId),
-        dateFrom: dateFrom || undefined,
-        dateTo: dateTo || undefined,
-        sort: txSort,
-      })
-      .then((rows) => {
-        if (!cancelled) setTransactions(rows);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setTxError(err instanceof Error ? err.message : 'Failed to load transactions.');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingTx(false);
-      });
+    const timer = window.setTimeout(() => {
+      api
+        .getAdminTransactions({
+          search: txSearch.trim() || undefined,
+          customerAccountId: txCustomerId === 'ALL' ? undefined : Number(txCustomerId),
+          dateFrom: dateFrom || undefined,
+          dateTo: dateTo || undefined,
+          sort: txSort,
+        })
+        .then((rows) => {
+          if (!cancelled) setTransactions(rows);
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            setTxError(err instanceof Error ? err.message : 'Failed to load transactions.');
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingTx(false);
+        });
+    }, txSearch ? 200 : 0);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [txSearch, txCustomerId, dateFrom, dateTo, txSort, ecoSummary?.paperless_count]);
 
@@ -94,7 +97,7 @@ export function AdminOverviewView({
           <button
             type="button"
             onClick={() => onNavigate('pos')}
-            className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-brand-700"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-brand-700"
           >
             <Store className="h-4 w-4" />
             Open POS Terminal
@@ -102,7 +105,7 @@ export function AdminOverviewView({
           <button
             type="button"
             onClick={() => onNavigate('inventory')}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
           >
             <Boxes className="h-4 w-4" />
             Manage Stock
@@ -158,7 +161,7 @@ export function AdminOverviewView({
             <button
               type="button"
               onClick={() => onNavigate('inventory')}
-              className="text-xs font-semibold text-brand-700 hover:underline"
+              className="inline-flex min-h-11 items-center px-2 text-xs font-semibold text-brand-700 hover:underline sm:min-h-9"
             >
               View All
             </button>
@@ -218,7 +221,7 @@ export function AdminOverviewView({
                     api.downloadDemoTransactionsCsv(txFilters);
                   }
                 }}
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 sm:min-h-9"
               >
                 <ScrollText className="h-3.5 w-3.5 text-slate-600" />
                 Export CSV
@@ -226,7 +229,7 @@ export function AdminOverviewView({
               <button
                 type="button"
                 onClick={() => onNavigate('receipt')}
-                className="min-h-9 rounded-lg px-2 text-xs font-semibold text-brand-700 hover:underline"
+                className="min-h-11 rounded-lg px-2 text-xs font-semibold text-brand-700 hover:underline sm:min-h-9"
               >
                 Lookup QR Token
               </button>
@@ -244,14 +247,14 @@ export function AdminOverviewView({
                 value={txSearch}
                 onChange={(e) => setTxSearch(e.target.value)}
                 placeholder="Search tx #, QR token, customer..."
-                className="min-h-10 w-full rounded-xl border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-8 text-xs outline-none focus:border-brand-500 focus:bg-white"
+                className="min-h-10 w-full rounded-xl border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-8 text-xs focus:border-brand-500 focus:bg-white"
               />
               {txSearch && (
                 <button
                   type="button"
                   aria-label="Clear transaction search"
                   onClick={() => setTxSearch('')}
-                  className="absolute right-1.5 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200"
+                  className="absolute right-1 top-1/2 inline-flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200 sm:min-h-8 sm:min-w-8"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -264,7 +267,7 @@ export function AdminOverviewView({
                 aria-label="Filter transactions by customer"
                 value={txCustomerId}
                 onChange={(e) => setTxCustomerId(e.target.value)}
-                className="min-h-10 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-800 outline-none focus:border-brand-500 focus:bg-white"
+                className="min-h-10 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-800 focus:border-brand-500 focus:bg-white"
               >
                 <option value="ALL">All Customers</option>
                 {customers.map((c) => (
@@ -279,7 +282,7 @@ export function AdminOverviewView({
                 aria-label="Sort transactions"
                 value={txSort}
                 onChange={(e) => setTxSort(e.target.value as AdminTransactionSort)}
-                className="min-h-10 rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-800 outline-none focus:border-brand-500 focus:bg-white"
+                className="min-h-10 rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-800 focus:border-brand-500 focus:bg-white"
               >
                 <option value="newest">Newest</option>
                 <option value="oldest">Oldest</option>
@@ -297,7 +300,7 @@ export function AdminOverviewView({
                 aria-label="Transactions from date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="min-h-9 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs text-slate-800 outline-none focus:border-brand-500"
+                className="min-h-9 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs text-slate-800 focus:border-brand-500"
               />
             </label>
             <label className="flex items-center gap-1.5 text-[11px] font-medium text-slate-700">
@@ -307,7 +310,7 @@ export function AdminOverviewView({
                 aria-label="Transactions to date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="min-h-9 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs text-slate-800 outline-none focus:border-brand-500"
+                className="min-h-9 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs text-slate-800 focus:border-brand-500"
               />
             </label>
             {hasFilters && (
@@ -372,7 +375,7 @@ export function AdminOverviewView({
                     <button
                       type="button"
                       onClick={() => onInspectToken(tx.qr_code)}
-                      className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-[11px] font-semibold text-slate-800 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800"
+                      className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-[11px] font-semibold text-slate-800 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800 sm:min-h-9"
                     >
                       <QrCode className="h-3 w-3" />
                       Receipt

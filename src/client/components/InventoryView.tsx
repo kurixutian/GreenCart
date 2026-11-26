@@ -267,7 +267,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
             <Boxes className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Inventory &amp; Catalog Management</h2>
+            <h1 className="text-lg font-bold text-slate-900">Inventory &amp; Catalog Management</h1>
             <p className="text-xs text-slate-500">
               Low-stock alerts appear first. Click any price or quantity to edit inline.
             </p>
@@ -320,10 +320,11 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
+              aria-label="Filter inventory items"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Filter inventory items..."
-              className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-9 text-sm outline-none focus:border-brand-500 focus:bg-white"
+              className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-9 text-sm focus:border-brand-500 focus:bg-white"
             />
             {search && (
               <button
@@ -341,7 +342,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
               aria-label="Filter inventory by category"
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="min-h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-brand-500"
+              className="min-h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 focus:border-brand-500"
             >
               <option value="ALL">All Categories</option>
               {PRODUCT_CATEGORIES.map((cat) => (
@@ -354,6 +355,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
               <button
                 key={status}
                 type="button"
+                aria-pressed={statusFilter === status}
                 onClick={() => setStatusFilter(status)}
                 className={`min-h-11 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                   statusFilter === status
@@ -380,7 +382,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
               aria-label="Stock adjustment reason"
               value={adjustReason}
               onChange={(e) => setAdjustReason(e.target.value)}
-              className="min-h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-brand-500"
+              className="min-h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 focus:border-brand-500"
             >
               {ADJUSTMENT_REASONS.map((reason) => (
                 <option key={reason} value={reason}>
@@ -482,7 +484,12 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
         </div>
 
         {/* Desktop Table with Inline Price & Quantity Editing */}
-        <div className="hidden overflow-x-auto md:block">
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label="Inventory table"
+          className="hidden overflow-x-auto md:block"
+        >
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-600">
               <tr>
@@ -538,12 +545,13 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                             if (e.key === 'Enter') void commitInlineEdit(item);
                             if (e.key === 'Escape') setInlineEdit(null);
                           }}
-                          className="w-24 rounded-lg border border-brand-500 px-2 py-1 text-right font-mono text-xs outline-none"
+                          className="w-24 rounded-lg border border-brand-500 px-2 py-1 text-right font-mono text-xs"
                         />
                       ) : (
                         <button
                           type="button"
                           title="Click to edit price inline"
+                          aria-label={`Edit price for ${item.product_name}`}
                           onClick={() =>
                             setInlineEdit({
                               productId: item.product_id,
@@ -551,7 +559,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                               value: String(item.price),
                             })
                           }
-                          className="rounded px-1.5 py-0.5 hover:bg-brand-50 hover:text-brand-700"
+                          className="rounded border-b border-dashed border-slate-300 px-1.5 py-0.5 hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700"
                         >
                           {formatCurrency(item.price)}
                         </button>
@@ -574,12 +582,13 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                             if (e.key === 'Enter') void commitInlineEdit(item);
                             if (e.key === 'Escape') setInlineEdit(null);
                           }}
-                          className="w-20 rounded-lg border border-brand-500 px-2 py-1 text-right font-mono text-xs outline-none"
+                          className="w-20 rounded-lg border border-brand-500 px-2 py-1 text-right font-mono text-xs"
                         />
                       ) : (
                         <button
                           type="button"
                           title="Click to edit quantity inline"
+                          aria-label={`Edit stock quantity for ${item.product_name}`}
                           onClick={() =>
                             setInlineEdit({
                               productId: item.product_id,
@@ -587,7 +596,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                               value: String(item.quantity),
                             })
                           }
-                          className="rounded px-1.5 py-0.5 hover:bg-brand-50 hover:text-brand-700"
+                          className="rounded border-b border-dashed border-slate-300 px-1.5 py-0.5 hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700"
                         >
                           {item.quantity}
                         </button>
@@ -696,28 +705,36 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
 
             <form onSubmit={handleSaveProduct} className="mt-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
+                <label
+                  htmlFor="product-name-input"
+                  className="block text-xs font-semibold uppercase tracking-wider text-slate-600"
+                >
                   Product Name
                 </label>
                 <input
+                  id="product-name-input"
                   type="text"
                   required
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
-                  className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
+                <label
+                  htmlFor="product-desc-input"
+                  className="block text-xs font-semibold uppercase tracking-wider text-slate-600"
+                >
                   Description
                 </label>
                 <textarea
+                  id="product-desc-input"
                   rows={3}
                   required
                   value={descInput}
                   onChange={(e) => setDescInput(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                 />
               </div>
 
@@ -737,7 +754,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                     required
                     value={priceInput}
                     onChange={(e) => setPriceInput(e.target.value)}
-                    className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                    className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                   />
                 </div>
 
@@ -756,7 +773,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                     required
                     value={qtyInput}
                     onChange={(e) => setQtyInput(e.target.value)}
-                    className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                    className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                   />
                 </div>
 
@@ -776,7 +793,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                     required
                     value={reorderInput}
                     onChange={(e) => setReorderInput(e.target.value)}
-                    className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                    className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                   />
                 </div>
               </div>
@@ -793,7 +810,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                     id="product-category-select"
                     value={categoryInput}
                     onChange={(e) => setCategoryInput(e.target.value)}
-                    className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                    className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                   >
                     {PRODUCT_CATEGORIES.map((cat) => (
                       <option key={cat} value={cat}>
@@ -816,7 +833,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                     value={skuInput}
                     onChange={(e) => setSkuInput(e.target.value.toUpperCase())}
                     placeholder="e.g. ECO-109"
-                    className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm uppercase outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                    className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3.5 py-2 font-mono text-sm uppercase focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                   />
                 </div>
               </div>
@@ -852,7 +869,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                       value={imageUrlInput}
                       onChange={(e) => setImageUrlInput(e.target.value)}
                       placeholder="/images/products/product-1.svg or https://..."
-                      className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 font-mono text-xs outline-none focus:border-brand-500"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 font-mono text-xs focus:border-brand-500"
                     />
                   </div>
                 </div>
@@ -918,7 +935,7 @@ export function InventoryView({ catalog, onRefresh, onNotify }: InventoryViewPro
                   setLogProductFilter(val);
                   void loadAdjustmentLogs(val);
                 }}
-                className="min-h-11 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-brand-500"
+                className="min-h-11 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 focus:border-brand-500"
               >
                 <option value="ALL">All Products</option>
                 {catalog.map((p) => (

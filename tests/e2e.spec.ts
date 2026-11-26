@@ -19,6 +19,9 @@ test.describe('GreenCart Browser E2E, Mobile P0 & Accessibility', () => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'GreenCart' })).toBeVisible();
 
+    const authAxe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+    expect(authAxe.violations).toEqual([]);
+
     await page.getByRole('button', { name: /Maria Santos/i }).click();
     await expect(page.getByText('BOTANICAL ECO MARKET')).toBeVisible();
 
@@ -54,6 +57,10 @@ test.describe('GreenCart Browser E2E, Mobile P0 & Accessibility', () => {
     const modal = page.getByRole('dialog');
     await expect(modal).toBeVisible();
     await expect(modal.locator('img[alt="Recycled Kraft Spiral Notebook"]')).toBeVisible();
+    const productModalAxe = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(productModalAxe.violations).toEqual([]);
     await page.keyboard.press('Escape');
     await expect(modal).toBeHidden();
 
@@ -69,6 +76,10 @@ test.describe('GreenCart Browser E2E, Mobile P0 & Accessibility', () => {
 
     if (isNarrow) {
       await page.getByRole('button', { name: /Open shopping cart/i }).click();
+      const cartSheetAxe = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa'])
+        .analyze();
+      expect(cartSheetAxe.violations).toEqual([]);
     }
 
     await page.getByRole('button', { name: /Review & Confirm Order/i }).click();
@@ -153,6 +164,10 @@ test.describe('GreenCart Browser E2E, Mobile P0 & Accessibility', () => {
     // Verify dynamic Walk-In Customer default & empty POS register submit button is disabled
     if (isNarrow) {
       await page.getByRole('button', { name: /Open Register/i }).click();
+      const posSheetAxe = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa'])
+        .analyze();
+      expect(posSheetAxe.violations).toEqual([]);
     }
     await expect(
       page.getByRole('button', { name: /Complete Sale and Generate QR Receipt/i })
@@ -196,6 +211,10 @@ test.describe('GreenCart Browser E2E, Mobile P0 & Accessibility', () => {
 
     if (isNarrow) {
       await page.getByRole('button', { name: /Open Register/i }).click();
+      const posSheetAxe = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa'])
+        .analyze();
+      expect(posSheetAxe.violations).toEqual([]);
     }
     await page.getByRole('button', { name: /Complete Sale and Generate QR Receipt/i }).click();
     await expect(page.getByText(/Order confirmed — your paperless digital receipt/i)).toBeVisible();
@@ -226,7 +245,21 @@ test.describe('GreenCart Browser E2E, Mobile P0 & Accessibility', () => {
     await expect(page.locator('#product-category-select')).toBeVisible();
     await expect(page.locator('#product-image-upload')).toBeVisible();
     await expect(page.locator('#product-reorder-input')).toBeVisible();
+    const productFormAxe = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(productFormAxe.violations).toEqual([]);
     await page.getByRole('button', { name: /Close product form/i }).click();
+
+    await page.getByRole('button', { name: /Inspect 7-Entity Database/i }).click();
+    await expect(
+      page.getByRole('heading', { name: /Seven-Entity SQLite Live Inspector/i })
+    ).toBeVisible();
+    const dbModalAxe = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(dbModalAxe.violations).toEqual([]);
+    await page.getByRole('button', { name: /Close database inspector/i }).click();
 
     await page.getByRole('button', { name: /Adjustment Log/i }).click();
     await expect(

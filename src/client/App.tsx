@@ -1,17 +1,36 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { api } from './api';
-import { AccountModal } from './components/AccountModal';
-import { AdminOverviewView } from './components/AdminOverviewView';
-import { AdminShell, type AdminSection } from './components/AdminShell';
 import { AuthView } from './components/AuthView';
 import { CatalogView } from './components/CatalogView';
 import { CustomerShell, type CustomerSection } from './components/CustomerShell';
-import { DbInspectorModal } from './components/DbInspectorModal';
-import { EcoImpactView } from './components/EcoImpactView';
-import { HistoryView } from './components/HistoryView';
-import { InventoryView } from './components/InventoryView';
-import { PosView } from './components/PosView';
-import { ReceiptView } from './components/ReceiptView';
+import { type AdminSection } from './components/AdminShell';
+import { X } from './components/Icons';
+
+const AccountModal = lazy(() =>
+  import('./components/AccountModal').then((m) => ({ default: m.AccountModal }))
+);
+const AdminOverviewView = lazy(() =>
+  import('./components/AdminOverviewView').then((m) => ({ default: m.AdminOverviewView }))
+);
+const AdminShell = lazy(() =>
+  import('./components/AdminShell').then((m) => ({ default: m.AdminShell }))
+);
+const DbInspectorModal = lazy(() =>
+  import('./components/DbInspectorModal').then((m) => ({ default: m.DbInspectorModal }))
+);
+const EcoImpactView = lazy(() =>
+  import('./components/EcoImpactView').then((m) => ({ default: m.EcoImpactView }))
+);
+const HistoryView = lazy(() =>
+  import('./components/HistoryView').then((m) => ({ default: m.HistoryView }))
+);
+const InventoryView = lazy(() =>
+  import('./components/InventoryView').then((m) => ({ default: m.InventoryView }))
+);
+const PosView = lazy(() => import('./components/PosView').then((m) => ({ default: m.PosView })));
+const ReceiptView = lazy(() =>
+  import('./components/ReceiptView').then((m) => ({ default: m.ReceiptView }))
+);
 import type { CartEntry } from './utils/format';
 import type {
   CatalogItem,
@@ -175,6 +194,7 @@ export function App() {
     if (!user) return;
     let warnTimer: number | undefined;
     let expireTimer: number | undefined;
+    let lastResetAt = 0;
 
     const resetTimers = () => {
       window.clearTimeout(warnTimer);
@@ -186,9 +206,11 @@ export function App() {
     };
 
     const onActivity = () => {
-      if (!idleWarningOpen) {
-        resetTimers();
-      }
+      if (idleWarningOpen) return;
+      const now = Date.now();
+      if (now - lastResetAt < 1000) return;
+      lastResetAt = now;
+      resetTimers();
     };
 
     resetTimers();
@@ -304,7 +326,15 @@ export function App() {
         <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 sm:py-10">
           <AuthView onAuthenticated={handleAuthenticated} onNotify={notify} />
         </main>
-      ) : user.account_type === 'customer' ? (
+      ) : (
+        <Suspense
+          fallback={
+            <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-600">
+              Loading workspace...
+            </div>
+          }
+        >
+          {user.account_type === 'customer' ? (
         <CustomerShell
           user={user}
           activeSection={customerSection}
@@ -455,6 +485,8 @@ export function App() {
             onNotify={notify}
           />
         </AdminShell>
+          )}
+        </Suspense>
       )}
 
       {/* Session Idle Warning Modal */}
@@ -465,7 +497,7 @@ export function App() {
           aria-labelledby="session-warning-title"
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 p-4 backdrop-blur-xs"
         >
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
             <h2 id="session-warning-title" className="text-base font-bold text-slate-900">
               Your session will expire in 5 minutes
             </h2>
@@ -494,14 +526,15 @@ export function App() {
 
       {toast && (
         <div
-          role="status"
-          className={`fixed bottom-20 right-4 z-50 flex max-w-sm items-center gap-3 rounded-2xl border px-4 py-3 text-xs font-semibold shadow-xl md:bottom-5 md:right-5 print:hidden ${
+          key={toast.id}
+          role={toast.type === 'error' ? 'alert' : 'status'}
+          className={`fixed top-20 right-4 z-50 flex max-w-sm items-center gap-2 rounded-2xl border py-2 pl-4 pr-2 text-xs font-semibold shadow-xl lg:top-auto lg:bottom-5 lg:right-5 print:hidden ${
             toast.type === 'error'
               ? 'border-rose-200 bg-rose-600 text-white'
               : 'border-brand-700 bg-slate-900 text-white'
           }`}
         >
-          <span className="flex-1">{toast.message}</span>
+          <span className="flex-1 py-1">{toast.message}</span>
           {toast.actionLabel && toast.onAction && (
             <button
               type="button"
@@ -509,11 +542,19 @@ export function App() {
                 toast.onAction?.();
                 setToast(null);
               }}
-              className="shrink-0 rounded-lg bg-brand-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-brand-500"
+              className="inline-flex min-h-11 shrink-0 items-center rounded-lg bg-brand-600 px-3 text-xs font-bold text-white hover:bg-brand-500"
             >
               {toast.actionLabel}
             </button>
           )}
+          <button
+            type="button"
+            aria-label="Dismiss notification"
+            onClick={() => setToast(null)}
+            className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-white/80 hover:bg-white/15 hover:text-white"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
     </>

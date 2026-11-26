@@ -199,7 +199,7 @@ export function PosView({
           id={selectId}
           value={selectedCustomerId}
           onChange={(e) => setSelectedCustomerId(Number(e.target.value))}
-          className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+          className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
         >
           {customers.map((cust) => (
             <option key={cust.account_id} value={cust.account_id}>
@@ -312,7 +312,7 @@ export function PosView({
           <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">Admin Point of Sale</h2>
+                <h1 className="text-lg font-bold text-slate-900">Admin Point of Sale</h1>
                 <p className="text-xs text-slate-500">
                   Shortcuts: <span className="font-mono font-semibold">F2</span> search ·{' '}
                   <span className="font-mono font-semibold">Enter</span> quick-add ·{' '}
@@ -325,11 +325,12 @@ export function PosView({
                   ref={searchInputRef}
                   id="pos-search-input"
                   type="text"
+                  aria-label="Search SKU or product"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
                   placeholder="Search SKU # or product..."
-                  className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-9 text-sm outline-none transition focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20"
+                  className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-9 text-sm transition focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20"
                 />
                 {search && (
                   <button
@@ -349,7 +350,7 @@ export function PosView({
                 aria-label="Filter POS by category"
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="min-h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-brand-500"
+                className="min-h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 focus:border-brand-500"
               >
                 <option value="ALL">All Categories</option>
                 {PRODUCT_CATEGORIES.map((cat) => (
@@ -362,6 +363,7 @@ export function PosView({
                 <button
                   key={status}
                   type="button"
+                  aria-pressed={statusFilter === status}
                   onClick={() => setStatusFilter(status)}
                   className={`min-h-11 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                     statusFilter === status
@@ -426,24 +428,29 @@ export function PosView({
         </aside>
       </div>
 
-      <div className="fixed inset-x-4 bottom-20 z-30 lg:hidden">
+      <div className="fixed inset-x-4 bottom-20 z-30 md:bottom-5 lg:hidden">
         <button
           type="button"
           onClick={() => setMobileRegisterOpen(true)}
-          className="flex min-h-12 w-full items-center justify-between rounded-2xl bg-slate-900 px-4 py-3 text-white shadow-xl"
+          className="flex min-h-12 w-full items-center justify-between gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-white shadow-xl"
         >
-          <span className="flex items-center gap-2 text-xs font-bold">
-            <ShoppingBag className="h-4 w-4 text-brand-400" />
-            Current Sale ({totalUnits} items)
+          <span className="flex min-w-0 items-center gap-2 whitespace-nowrap text-xs font-bold">
+            <ShoppingBag className="h-4 w-4 shrink-0 text-brand-400" />
+            <span className="truncate">Current Sale ({totalUnits})</span>
           </span>
-          <span className="font-mono text-sm font-extrabold text-brand-300 tabular-nums">
+          <span className="shrink-0 whitespace-nowrap font-mono text-sm font-extrabold text-brand-300 tabular-nums">
             {formatCurrency(saleTotal)} · Open Register
           </span>
         </button>
       </div>
 
       {mobileRegisterOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 backdrop-blur-xs lg:hidden">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Current Sale Register"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 backdrop-blur-xs lg:hidden"
+        >
           <div className="relative flex max-h-[88vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl">
             <button
               type="button"

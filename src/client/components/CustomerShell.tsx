@@ -70,6 +70,7 @@ export function CustomerShell({
                 <button
                   key={item.key}
                   type="button"
+                  aria-current={active ? 'page' : undefined}
                   onClick={() => onNavigate(item.key)}
                   className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition ${
                     active
@@ -93,10 +94,7 @@ export function CustomerShell({
             >
               <ShoppingCart className="h-4 w-4 text-brand-600" />
               <span>Cart</span>
-              <span
-                key={cartCount}
-                className="inline-flex min-w-[1.35rem] items-center justify-center rounded-full bg-brand-600 px-1.5 py-0.5 font-mono text-[11px] text-white transition-transform duration-200"
-              >
+              <span className="inline-flex min-w-[1.35rem] items-center justify-center rounded-full bg-brand-600 px-1.5 py-0.5 font-mono text-[11px] text-white">
                 {cartCount}
               </span>
             </button>
@@ -139,6 +137,7 @@ export function CustomerShell({
               <button
                 key={item.key}
                 type="button"
+                aria-current={active ? 'page' : undefined}
                 onClick={() => onNavigate(item.key)}
                 className={`flex min-h-11 flex-col items-center justify-center rounded-xl py-1.5 text-[10px] font-semibold transition ${
                   active ? 'bg-brand-50 text-brand-700' : 'text-slate-600'

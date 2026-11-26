@@ -89,7 +89,7 @@ export function ReceiptView({
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs print:hidden">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Digital Receipt &amp; QR Verification</h2>
+            <h1 className="text-lg font-bold text-slate-900">Digital Receipt &amp; QR Verification</h1>
             <p className="text-xs text-slate-500">
               Scan or enter an opaque receipt token (e.g. <span className="font-mono">GC-7D30B59E42A1</span>) to verify a paperless transaction.
             </p>
@@ -99,17 +99,17 @@ export function ReceiptView({
               <button
                 type="button"
                 onClick={onBackToShop}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
               >
                 <ShoppingBag className="h-3.5 w-3.5" />
-                Back to Catalog / POS
+                {onOpenHistory ? 'Back to Catalog' : 'Back to POS'}
               </button>
             )}
             {onOpenHistory && (
               <button
                 type="button"
                 onClick={onOpenHistory}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
               >
                 <History className="h-3.5 w-3.5" />
                 Purchase History
@@ -119,7 +119,7 @@ export function ReceiptView({
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800 hover:bg-brand-100"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800 hover:bg-brand-100"
               >
                 <Printer className="h-3.5 w-3.5" />
                 Print Receipt
@@ -133,16 +133,17 @@ export function ReceiptView({
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
+              aria-label="QR receipt token"
               value={tokenInput}
               onChange={(e) => setTokenInput(e.target.value)}
               placeholder="Enter QR receipt token (e.g. GC-7D30B59E42A1)"
-              className="w-full rounded-xl border border-slate-300 bg-slate-50 py-2.5 pl-10 pr-4 font-mono text-sm uppercase outline-none transition focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20"
+              className="min-h-11 w-full rounded-xl border border-slate-300 bg-slate-50 py-2.5 pl-10 pr-4 font-mono text-xs uppercase transition focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20 sm:text-sm"
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-60"
           >
             <QrCode className="h-4 w-4" />
             {loading ? 'Verifying...' : 'Verify Receipt Token'}
@@ -157,7 +158,7 @@ export function ReceiptView({
                 key={tok}
                 type="button"
                 onClick={() => void lookupToken(tok)}
-                className={`rounded-lg border px-2.5 py-1 font-mono text-xs transition ${
+                className={`min-h-11 rounded-lg border px-2.5 py-1 font-mono text-xs transition sm:min-h-9 ${
                   activeReceipt?.qr_code === tok
                     ? 'border-brand-500 bg-brand-50 font-semibold text-brand-700'
                     : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300'
@@ -194,8 +195,8 @@ export function ReceiptView({
                 </h3>
               </div>
             </div>
-            <div className="text-right">
-              <span className="inline-block rounded-lg bg-white/10 px-3 py-1 font-mono text-xs font-semibold tracking-wider text-brand-200 print:border print:border-slate-300 print:text-slate-800">
+            <div className="sm:text-right">
+              <span className="inline-block max-w-full break-all rounded-lg bg-white/10 px-3 py-1 font-mono text-xs font-semibold tracking-wider text-brand-200 print:border print:border-slate-300 print:text-slate-800">
                 {activeReceipt.qr_code}
               </span>
               <p className="mt-1 text-xs text-slate-400 print:text-slate-600">
@@ -231,7 +232,12 @@ export function ReceiptView({
                 <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
                   Purchased Items
                 </h4>
-                <div className="overflow-hidden rounded-xl border border-slate-200">
+                <div
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Purchased items"
+                  className="overflow-x-auto rounded-xl border border-slate-200"
+                >
                   <table className="w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                       <tr>
@@ -286,7 +292,7 @@ export function ReceiptView({
                     <QrCode className="h-12 w-12" />
                   </div>
                 )}
-                <p className="mt-3 break-all font-mono text-[11px] font-bold text-slate-800">
+                <p className="mt-3 break-all font-mono text-[10px] font-bold text-slate-800 sm:text-[11px]">
                   {activeReceipt.qr_code}
                 </p>
                 <p className="mt-1 text-[11px] text-slate-500">
@@ -309,7 +315,7 @@ export function ReceiptView({
                   </div>
                   <div className="rounded-xl bg-white p-3 shadow-xs">
                     <span className="block text-[11px] text-slate-600">CO₂e Reduced (Est.)</span>
-                    <span className="mt-0.5 block font-mono text-base font-extrabold text-emerald-700 tabular-nums">
+                    <span className="mt-0.5 block font-mono text-base font-extrabold text-brand-700 tabular-nums">
                       {activeReceipt.carbon_reduction.toFixed(2)}
                     </span>
                     <span className="text-[10px] text-slate-600">grams CO₂e</span>

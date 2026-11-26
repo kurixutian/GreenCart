@@ -61,46 +61,46 @@ export function AuthView({ onAuthenticated, onNotify }: AuthViewProps) {
       <div className="grid overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60 lg:grid-cols-12">
         <div className="flex flex-col justify-between bg-gradient-to-br from-brand-700 via-brand-600 to-brand-800 p-8 text-white lg:col-span-5 sm:p-10">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold tracking-wide text-brand-50 ring-1 ring-white/25">
+            <div className="inline-flex items-center gap-2 rounded-full bg-brand-800 px-3 py-1 text-xs font-semibold tracking-wide text-brand-50 ring-1 ring-brand-400/30">
               <Leaf className="h-3.5 w-3.5" />
               PAPERLESS RETAIL &amp; POS
             </div>
             <h1 className="mt-5 text-3xl font-extrabold tracking-tight">GreenCart</h1>
-            <p className="mt-3 text-sm leading-relaxed text-brand-100">
+            <p className="mt-3 text-sm leading-relaxed text-brand-50">
               Eco-friendly shopping portal and point-of-sale system connecting inventory,
               atomic transactions, QR digital receipts, and verified environmental estimates.
             </p>
 
             <div className="mt-8 space-y-3.5 text-sm">
               <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-white/15 p-2">
+                <div className="rounded-lg bg-brand-800 p-2">
                   <ShoppingBag className="h-4 w-4 text-brand-50" />
                 </div>
                 <div>
                   <p className="font-semibold">Customer Storefront &amp; Cart</p>
-                  <p className="text-xs text-brand-100/90">
+                  <p className="text-xs text-brand-50">
                     Search eco-products, check live stock, and get instant QR receipts.
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-white/15 p-2">
+                <div className="rounded-lg bg-brand-800 p-2">
                   <QrCode className="h-4 w-4 text-brand-50" />
                 </div>
                 <div>
                   <p className="font-semibold">Atomic POS &amp; Paperless Receipts</p>
-                  <p className="text-xs text-brand-100/90">
+                  <p className="text-xs text-brand-50">
                     Single server-side transaction updates stock, receipts, and eco-impact.
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-white/15 p-2">
+                <div className="rounded-lg bg-brand-800 p-2">
                   <ShieldCheck className="h-4 w-4 text-brand-50" />
                 </div>
                 <div>
                   <p className="font-semibold">Role-Scoped Security</p>
-                  <p className="text-xs text-brand-100/90">
+                  <p className="text-xs text-brand-50">
                     Public registration creates customer accounts only; admin routes are protected server-side.
                   </p>
                 </div>
@@ -109,7 +109,7 @@ export function AuthView({ onAuthenticated, onNotify }: AuthViewProps) {
           </div>
 
           <div className="mt-8 border-t border-white/15 pt-5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-brand-100">
+            <p className="text-xs font-semibold uppercase tracking-wider text-brand-50">
               Quick Demo Sign-In
             </p>
             <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3 lg:grid-cols-1">
@@ -117,7 +117,7 @@ export function AuthView({ onAuthenticated, onNotify }: AuthViewProps) {
                 type="button"
                 disabled={submitting}
                 onClick={() => handleDemoLogin('maria_santos', 'customer123')}
-                className="flex items-center justify-between rounded-xl bg-white/10 px-3.5 py-2.5 text-left text-xs font-medium transition hover:bg-white/20 disabled:opacity-60"
+                className="flex items-center justify-between rounded-xl bg-brand-800/80 px-3.5 py-2.5 text-left text-xs font-medium text-white ring-1 ring-white/15 transition hover:bg-brand-900 disabled:opacity-60"
               >
                 <span>Maria Santos (Customer)</span>
                 <span className="font-mono text-[11px] text-brand-100">maria_santos</span>
@@ -126,7 +126,7 @@ export function AuthView({ onAuthenticated, onNotify }: AuthViewProps) {
                 type="button"
                 disabled={submitting}
                 onClick={() => handleDemoLogin('juan_delacruz', 'customer123')}
-                className="flex items-center justify-between rounded-xl bg-white/10 px-3.5 py-2.5 text-left text-xs font-medium transition hover:bg-white/20 disabled:opacity-60"
+                className="flex items-center justify-between rounded-xl bg-brand-800/80 px-3.5 py-2.5 text-left text-xs font-medium text-white ring-1 ring-white/15 transition hover:bg-brand-900 disabled:opacity-60"
               >
                 <span>Juan Dela Cruz (Customer)</span>
                 <span className="font-mono text-[11px] text-brand-100">juan_delacruz</span>
@@ -196,7 +196,7 @@ export function AuthView({ onAuthenticated, onNotify }: AuthViewProps) {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="e.g. maria_santos or admin_qcu"
-                  className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                 />
               </div>
 
@@ -212,7 +212,7 @@ export function AuthView({ onAuthenticated, onNotify }: AuthViewProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
-                  className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                 />
               </div>
 
@@ -246,7 +246,7 @@ export function AuthView({ onAuthenticated, onNotify }: AuthViewProps) {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="e.g. Elena Reyes"
-                  className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                 />
               </div>
 
@@ -261,7 +261,7 @@ export function AuthView({ onAuthenticated, onNotify }: AuthViewProps) {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="lowercase letters, numbers, underscores"
-                  className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                 />
               </div>
 
@@ -277,7 +277,7 @@ export function AuthView({ onAuthenticated, onNotify }: AuthViewProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Minimum 6 characters"
-                  className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                 />
               </div>
 

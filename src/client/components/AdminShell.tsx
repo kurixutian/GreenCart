@@ -64,6 +64,7 @@ export function AdminShell({
                 <button
                   key={item.key}
                   type="button"
+                  aria-current={active ? 'page' : undefined}
                   onClick={() => onNavigate(item.key)}
                   className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
                     active
@@ -83,7 +84,7 @@ export function AdminShell({
               type="button"
               aria-label="Inspect 7-Entity Database"
               onClick={onOpenDbModal}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-slate-700"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-slate-700"
             >
               <Database className="h-3.5 w-3.5 text-brand-400" />
               <span className="hidden sm:inline">7-Entity DB</span>
@@ -97,7 +98,7 @@ export function AdminShell({
               type="button"
               onClick={onLogout}
               aria-label="Sign Out"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-rose-500/50 hover:bg-rose-500/10 hover:text-rose-200"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-rose-500/50 hover:bg-rose-500/10 hover:text-rose-200"
             >
               <LogOut className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Sign Out</span>
@@ -121,8 +122,9 @@ export function AdminShell({
               <button
                 key={item.key}
                 type="button"
+                aria-current={active ? 'page' : undefined}
                 onClick={() => onNavigate(item.key)}
-                className={`flex flex-col items-center justify-center rounded-lg py-1.5 text-[10px] font-semibold transition ${
+                className={`flex min-h-11 flex-col items-center justify-center rounded-lg py-1.5 text-[10px] font-semibold transition ${
                   active ? 'bg-brand-600 text-white' : 'text-slate-400'
                 }`}
               >
