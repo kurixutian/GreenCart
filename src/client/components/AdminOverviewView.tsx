@@ -150,7 +150,7 @@ export function AdminOverviewView({
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-12">
+      <div className="grid items-start gap-6 lg:grid-cols-12">
         {/* Low / Out of Stock Attention Queue */}
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs lg:col-span-5">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -261,13 +261,13 @@ export function AdminOverviewView({
               )}
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex min-w-0 gap-2">
               <select
                 id="admin-tx-customer"
                 aria-label="Filter transactions by customer"
                 value={txCustomerId}
                 onChange={(e) => setTxCustomerId(e.target.value)}
-                className="min-h-10 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-800 focus:border-brand-500 focus:bg-white"
+                className="min-h-10 min-w-0 flex-1 truncate rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-800 focus:border-brand-500 focus:bg-white"
               >
                 <option value="ALL">All Customers</option>
                 {customers.map((c) => (
@@ -282,7 +282,7 @@ export function AdminOverviewView({
                 aria-label="Sort transactions"
                 value={txSort}
                 onChange={(e) => setTxSort(e.target.value as AdminTransactionSort)}
-                className="min-h-10 rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-800 focus:border-brand-500 focus:bg-white"
+                className="min-h-10 shrink-0 rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-800 focus:border-brand-500 focus:bg-white"
               >
                 <option value="newest">Newest</option>
                 <option value="oldest">Oldest</option>
@@ -334,7 +334,7 @@ export function AdminOverviewView({
             tabIndex={0}
             role="region"
             aria-label="Store transactions list"
-            className="mt-3 max-h-[380px] divide-y divide-slate-100 overflow-y-auto pr-1 focus:outline-2 focus:outline-brand-600"
+            className="mt-3 max-h-96 divide-y divide-slate-100 overflow-y-auto pr-1 focus:outline-2 focus:outline-brand-600"
           >
             {txError ? (
               <p className="py-6 text-center text-xs text-rose-700">{txError}</p>

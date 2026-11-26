@@ -1,7 +1,6 @@
-import { CloudOff, FileCheck2, Info, Leaf, QrCode, ScrollText } from './Icons';
+import { CloudOff, FileCheck2, Leaf, QrCode, ScrollText } from './Icons';
 import { formatCurrency } from '../utils/format';
 import {
-  ECO_IMPACT_SPEC,
   type AccountType,
   type EcoImpactSummary,
   type EcoScope,
@@ -22,7 +21,6 @@ export function EcoImpactView({
   onChangeScope,
   onInspectToken,
 }: EcoImpactViewProps) {
-  const spec = summary?.specification ?? ECO_IMPACT_SPEC;
   const paperSaved = summary?.total_paper_saved ?? 0;
   const nextMilestone = paperSaved < 10 ? 10 : paperSaved < 25 ? 25 : paperSaved < 50 ? 50 : 100;
   const progressPct = Math.min(100, Math.round((paperSaved / nextMilestone) * 100));
@@ -139,28 +137,6 @@ export function EcoImpactView({
             className="h-full w-full origin-left rounded-full bg-brand-600 transition-transform duration-300 ease-out"
             style={{ transform: `scaleX(${progressPct / 100})` }}
           />
-        </div>
-      </div>
-
-      {/* Formula Disclosure Banner */}
-      <div className="flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50/80 p-4 text-xs text-sky-900">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" />
-        <div className="space-y-1.5">
-          <p className="font-semibold">Documented Estimation Methodology</p>
-          <p className="text-sky-900">
-            {summary?.formula_note ?? spec.formula_note} Figures are project estimates derived from
-            persisted database records, not laboratory emission measurements.
-          </p>
-          <p className="text-[11px] text-sky-900">
-            <span className="font-semibold">Approved Metrics (Estimate &amp; Count Scope):</span>{' '}
-            {spec.metrics
-              .map(
-                (m) =>
-                  `${m.label} (${m.unit}, ${m.is_estimate ? 'Estimate' : 'Recorded Count'}) [${m.documented_in.join(', ')}]`
-              )
-              .join(' · ')}
-          </p>
-          <p className="text-[11px] font-medium text-sky-900">{spec.pending_approval_note}</p>
         </div>
       </div>
 
