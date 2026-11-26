@@ -6,6 +6,8 @@ import {
   QrCode,
   ShoppingBag,
   ShoppingCart,
+  Moon,
+  Sun,
   UserCheck,
 } from './Icons';
 import type { SafeUser } from '../../shared/types';
@@ -14,6 +16,8 @@ export type CustomerSection = 'catalog' | 'receipt' | 'history' | 'eco';
 
 interface CustomerShellProps {
   user: SafeUser;
+  themeMode: 'light' | 'dark';
+  onToggleTheme: () => void;
   activeSection: CustomerSection;
   cartCount: number;
   onNavigate: (section: CustomerSection) => void;
@@ -32,6 +36,8 @@ const CUSTOMER_NAV: Array<{ key: CustomerSection; label: string; mobileLabel: st
 
 export function CustomerShell({
   user,
+  themeMode,
+  onToggleTheme,
   activeSection,
   cartCount,
   onNavigate,
@@ -97,6 +103,17 @@ export function CustomerShell({
               <span className="inline-flex min-w-[1.35rem] items-center justify-center rounded-full bg-brand-600 px-1.5 py-0.5 font-mono text-[11px] text-white">
                 {cartCount}
               </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onToggleTheme}
+              aria-label={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} mode`}
+              title={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} mode`}
+              className="theme-toggle"
+            >
+              {themeMode === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              <span className="hidden sm:inline">{themeMode === 'dark' ? 'Light' : 'Dark'}</span>
             </button>
 
             <button

@@ -57,9 +57,9 @@ export function AuthView({ onAuthenticated, onNotify }: AuthViewProps) {
   }
 
   return (
-    <div className="mx-auto max-w-5xl py-6 sm:py-10">
-      <div className="grid overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60 lg:grid-cols-12">
-        <div className="flex flex-col justify-between bg-gradient-to-br from-brand-700 via-brand-600 to-brand-800 p-8 text-white lg:col-span-5 sm:p-10">
+    <div className="auth-screen">
+      <div className="auth-layout">
+        <div className="auth-story">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-brand-800 px-3 py-1 text-xs font-semibold tracking-wide text-brand-50 ring-1 ring-brand-400/30">
               <Leaf className="h-3.5 w-3.5" />
@@ -108,43 +108,10 @@ export function AuthView({ onAuthenticated, onNotify }: AuthViewProps) {
             </div>
           </div>
 
-          <div className="mt-8 border-t border-white/15 pt-5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-brand-50">
-              Quick Demo Sign-In
-            </p>
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3 lg:grid-cols-1">
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => handleDemoLogin('maria_santos', 'customer123')}
-                className="flex items-center justify-between rounded-xl bg-brand-800/80 px-3.5 py-2.5 text-left text-xs font-medium text-white ring-1 ring-white/15 transition hover:bg-brand-900 disabled:opacity-60"
-              >
-                <span>Maria Santos (Customer)</span>
-                <span className="font-mono text-[11px] text-brand-100">maria_santos</span>
-              </button>
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => handleDemoLogin('juan_delacruz', 'customer123')}
-                className="flex items-center justify-between rounded-xl bg-brand-800/80 px-3.5 py-2.5 text-left text-xs font-medium text-white ring-1 ring-white/15 transition hover:bg-brand-900 disabled:opacity-60"
-              >
-                <span>Juan Dela Cruz (Customer)</span>
-                <span className="font-mono text-[11px] text-brand-100">juan_delacruz</span>
-              </button>
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => handleDemoLogin('admin_qcu', 'admin123')}
-                className="flex items-center justify-between rounded-xl bg-slate-950/30 px-3.5 py-2.5 text-left text-xs font-medium ring-1 ring-white/20 transition hover:bg-slate-950/45 disabled:opacity-60"
-              >
-                <span>Store Administrator (POS)</span>
-                <span className="font-mono text-[11px] text-amber-200">admin_qcu</span>
-              </button>
-            </div>
-          </div>
         </div>
 
-        <div className="p-8 lg:col-span-7 sm:p-10">
+        <div className="auth-panel">
+          <div>
           <div className="inline-flex rounded-xl bg-slate-100 p-1">
             <button
               type="button"
@@ -291,6 +258,38 @@ export function AuthView({ onAuthenticated, onNotify }: AuthViewProps) {
               </button>
             </form>
           )}
+          {mode === 'login' && (
+            <div className="auth-demo">
+              <p>Quick Demo Sign-In</p>
+              <div>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => handleDemoLogin('maria_santos', 'customer123')}
+                >
+                  <span>Maria Santos (Customer)</span>
+                  <span>maria_santos</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => handleDemoLogin('juan_delacruz', 'customer123')}
+                >
+                  <span>Juan Dela Cruz (Customer)</span>
+                  <span>juan_delacruz</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => handleDemoLogin('admin_qcu', 'admin123')}
+                >
+                  <span>Store Administrator (POS)</span>
+                  <span>admin_qcu</span>
+                </button>
+              </div>
+            </div>
+          )}
+          </div>
         </div>
       </div>
     </div>

@@ -5,8 +5,10 @@ import {
   LayoutGrid,
   Leaf,
   LogOut,
+  Moon,
   QrCode,
   Store,
+  Sun,
 } from './Icons';
 import type { SafeUser } from '../../shared/types';
 
@@ -14,6 +16,8 @@ export type AdminSection = 'overview' | 'pos' | 'inventory' | 'receipt' | 'eco';
 
 interface AdminShellProps {
   user: SafeUser;
+  themeMode: 'light' | 'dark';
+  onToggleTheme: () => void;
   activeSection: AdminSection;
   onNavigate: (section: AdminSection) => void;
   onOpenDbModal: () => void;
@@ -31,6 +35,8 @@ const ADMIN_NAV: Array<{ key: AdminSection; label: string; shortLabel: string; i
 
 export function AdminShell({
   user,
+  themeMode,
+  onToggleTheme,
   activeSection,
   onNavigate,
   onOpenDbModal,
@@ -82,6 +88,17 @@ export function AdminShell({
           <div className="flex shrink-0 items-center gap-2">
             <span className="hidden text-xs text-slate-400 xl:inline">{user.full_name}</span>
             <span className="hidden h-4 w-px bg-slate-800 xl:inline-block" aria-hidden="true" />
+
+            <button
+              type="button"
+              onClick={onToggleTheme}
+              aria-label={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} mode`}
+              title={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} mode`}
+              className="theme-toggle"
+            >
+              {themeMode === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              <span className="hidden sm:inline">{themeMode === 'dark' ? 'Light' : 'Dark'}</span>
+            </button>
 
             <button
               type="button"

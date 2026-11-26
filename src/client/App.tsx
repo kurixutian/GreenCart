@@ -74,6 +74,13 @@ function readStoredCart(): CartEntry[] {
 
 export function App() {
   const [user, setUser] = useState<SafeUser | null>(null);
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
+    try {
+      return window.localStorage.getItem('greencart_theme') === 'light' ? 'light' : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
   const [initializing, setInitializing] = useState(true);
   const [customerSection, setCustomerSection] = useState<CustomerSection>('catalog');
   const [adminSection, setAdminSection] = useState<AdminSection>('pos');
@@ -116,6 +123,14 @@ export function App() {
       // ignore storage failures
     }
   }, [cart]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('greencart_theme', themeMode);
+    } catch {
+      // Keep the selected theme for this session when storage is unavailable.
+    }
+  }, [themeMode]);
 
   useEffect(() => {
     if (!toast) return;
@@ -331,7 +346,10 @@ export function App() {
   const totalCartUnits = cart.reduce((sum, entry) => sum + entry.quantity, 0);
 
   return (
-    <>
+    <div
+      className={user || publicReceipt ? 'app-workspace' : undefined}
+      data-theme={user || publicReceipt ? themeMode : undefined}
+    >
       {initializing ? (
         <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">
           Initializing GreenCart session...
@@ -375,7 +393,7 @@ export function App() {
           </main>
         </div>
       ) : !user ? (
-        <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 sm:py-10">
+        <main className="min-h-screen">
           <AuthView onAuthenticated={handleAuthenticated} onNotify={notify} />
         </main>
       ) : (
@@ -389,6 +407,8 @@ export function App() {
           {user.account_type === 'customer' ? (
         <CustomerShell
           user={user}
+          themeMode={themeMode}
+          onToggleTheme={() => setThemeMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
           activeSection={customerSection}
           cartCount={totalCartUnits}
           onNavigate={(sec) => {
@@ -467,6 +487,8 @@ export function App() {
       ) : (
         <AdminShell
           user={user}
+          themeMode={themeMode}
+          onToggleTheme={() => setThemeMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
           activeSection={adminSection}
           onNavigate={(sec) => {
             setAdminSection(sec);
@@ -609,7 +631,7 @@ export function App() {
           </button>
         </div>
       )}
-    </>
+    </div>
   );
 }
 export default App;
