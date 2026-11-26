@@ -1001,6 +1001,32 @@ export class GreenCartService {
     return this.loadReceiptByTransactionIdInternal(row.transaction_id);
   }
 
+  async getPublicReceiptByToken(qrCode: string): Promise<DigitalReceiptView> {
+    const token = qrCode.trim().toUpperCase();
+    if (!token) {
+      throw new AppError(400, 'QR receipt token is required.');
+    }
+
+    const row = await this.db.queryOne<{ transaction_id: number }>(
+      `SELECT t.transaction_id
+       FROM digital_receipts dr
+       INNER JOIN transactions t ON t.transaction_id = dr.transaction_id
+       WHERE UPPER(dr.qr_code) = ?`,
+      [token]
+    );
+
+    if (!row) {
+      throw new AppError(404, 'No digital receipt matched that QR token.');
+    }
+
+    const receipt = await this.loadReceiptByTransactionIdInternal(row.transaction_id);
+    return {
+      ...receipt,
+      customer_name: 'GreenCart Customer',
+      customer_username: 'verified_receipt',
+    };
+  }
+
   async getReceiptByTransactionId(
     transactionId: number,
     actor: SafeUser

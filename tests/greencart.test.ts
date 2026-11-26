@@ -760,4 +760,20 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     ]);
     expect(summary.specification?.pending_approval_note).toMatch(/Water saved is excluded/i);
   });
+
+  it('serves redacted public digital receipts by QR token without authentication', async () => {
+    const middleware = createApiMiddleware(db, 'test-secret');
+    const publicRes = await invokeMiddleware(middleware, {
+      method: 'GET',
+      url: '/api/public/receipts/token/GC-7D30B59E42A1',
+    });
+    expect(publicRes.statusCode).toBe(200);
+    const body = publicRes.body as {
+      receipt: { qr_code: string; customer_name: string; customer_username: string; items: unknown[] };
+    };
+    expect(body.receipt.qr_code).toBe('GC-7D30B59E42A1');
+    expect(body.receipt.customer_name).toBe('GreenCart Customer');
+    expect(body.receipt.customer_username).toBe('verified_receipt');
+    expect(body.receipt.items.length).toBeGreaterThan(0);
+  });
 });

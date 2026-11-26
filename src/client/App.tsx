@@ -82,6 +82,7 @@ export function App() {
   const [cart, setCart] = useState<CartEntry[]>(() => readStoredCart());
   const [history, setHistory] = useState<PurchaseHistoryItem[]>([]);
   const [activeReceipt, setActiveReceipt] = useState<DigitalReceiptView | null>(null);
+  const [publicReceipt, setPublicReceipt] = useState<DigitalReceiptView | null>(null);
   const [justCompletedReceipt, setJustCompletedReceipt] = useState(false);
   const [ecoScope, setEcoScope] = useState<EcoScope>('personal');
   const [ecoSummary, setEcoSummary] = useState<EcoImpactSummary | null>(null);
@@ -256,10 +257,20 @@ export function App() {
           setAdminSection('pos');
           await loadRoleData(currentUser, defaultScope);
           await openReceiptFromUrl(currentUser);
+        } else {
+          const urlReceipt = new URLSearchParams(window.location.search).get('receipt');
+          if (urlReceipt) {
+            const pub = await api.getPublicReceiptByToken(urlReceipt).catch(() => null);
+            if (pub) setPublicReceipt(pub);
+          }
         }
       })
-      .catch(() => {
-        // Unauthenticated
+      .catch(async () => {
+        const urlReceipt = new URLSearchParams(window.location.search).get('receipt');
+        if (urlReceipt) {
+          const pub = await api.getPublicReceiptByToken(urlReceipt).catch(() => null);
+          if (pub) setPublicReceipt(pub);
+        }
       })
       .finally(() => setInitializing(false));
   }, [loadRoleData, openReceiptFromUrl]);
@@ -267,6 +278,7 @@ export function App() {
   async function handleAuthenticated(nextUser: SafeUser) {
     setUser(nextUser);
     setActiveReceipt(null);
+    setPublicReceipt(null);
     setJustCompletedReceipt(false);
     setIdleWarningOpen(false);
     const defaultScope: EcoScope = nextUser.account_type === 'admin' ? 'store' : 'personal';
@@ -323,6 +335,44 @@ export function App() {
       {initializing ? (
         <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">
           Initializing GreenCart session...
+        </div>
+      ) : !user && publicReceipt ? (
+        <div className="min-h-screen bg-slate-50">
+          <header className="border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur-md sm:px-6 print:hidden">
+            <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-slate-900">GreenCart</span>
+                <span className="rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-semibold text-brand-800">
+                  Verified Digital Receipt
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPublicReceipt(null)}
+                className="inline-flex min-h-10 items-center rounded-xl bg-brand-600 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-700"
+              >
+                Sign In
+              </button>
+            </div>
+          </header>
+          <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center py-12 text-sm text-slate-500">
+                  Loading receipt...
+                </div>
+              }
+            >
+              <ReceiptView
+                activeReceipt={publicReceipt}
+                isPublic
+                onSelectReceipt={setPublicReceipt}
+                recentTokens={[]}
+                onNotify={notify}
+                onBackToShop={() => setPublicReceipt(null)}
+              />
+            </Suspense>
+          </main>
         </div>
       ) : !user ? (
         <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 sm:py-10">

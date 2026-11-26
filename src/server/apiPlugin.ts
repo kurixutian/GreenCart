@@ -403,6 +403,15 @@ export function createApiMiddleware(
         return;
       }
 
+      // GET /api/public/receipts/token/:qrCode (unauthenticated QR scan, redacted PII)
+      const publicReceiptTokenMatch = pathname.match(/^\/api\/public\/receipts\/token\/([^/]+)$/);
+      if (method === 'GET' && publicReceiptTokenMatch) {
+        const token = decodeURIComponent(publicReceiptTokenMatch[1]);
+        const receipt = await service.getPublicReceiptByToken(token);
+        sendJson(res, 200, { receipt });
+        return;
+      }
+
       // GET /api/receipts/token/:qrCode
       const receiptTokenMatch = pathname.match(/^\/api\/receipts\/token\/([^/]+)$/);
       if (method === 'GET' && receiptTokenMatch) {

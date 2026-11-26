@@ -300,6 +300,14 @@ export const api = {
     return res.receipt;
   },
 
+  async getPublicReceiptByToken(qrCode: string): Promise<DigitalReceiptView> {
+    if (staticDemoMode) return (await getDemoApi()).getReceiptByToken(qrCode);
+    const res = await requestJson<{ receipt: DigitalReceiptView }>(
+      `/api/public/receipts/token/${encodeURIComponent(qrCode)}`
+    );
+    return res.receipt;
+  },
+
   async getReceiptByToken(qrCode: string): Promise<DigitalReceiptView> {
     if (staticDemoMode) return (await getDemoApi()).getReceiptByToken(qrCode);
     const res = await requestJson<{ receipt: DigitalReceiptView }>(

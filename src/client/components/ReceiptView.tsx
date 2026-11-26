@@ -16,6 +16,7 @@ import type { DigitalReceiptView } from '../../shared/types';
 interface ReceiptViewProps {
   activeReceipt: DigitalReceiptView | null;
   justCompleted?: boolean;
+  isPublic?: boolean;
   onSelectReceipt: (receipt: DigitalReceiptView) => void;
   recentTokens: string[];
   onNotify: (message: string, type?: 'success' | 'error') => void;
@@ -26,6 +27,7 @@ interface ReceiptViewProps {
 export function ReceiptView({
   activeReceipt,
   justCompleted = false,
+  isPublic = false,
   onSelectReceipt,
   recentTokens,
   onNotify,
@@ -59,7 +61,9 @@ export function ReceiptView({
     if (!clean) return;
     setLoading(true);
     try {
-      const receipt = await api.getReceiptByToken(clean);
+      const receipt = isPublic
+        ? await api.getPublicReceiptByToken(clean)
+        : await api.getReceiptByToken(clean);
       onSelectReceipt(receipt);
     } catch (err) {
       onNotify(err instanceof Error ? err.message : 'Receipt lookup failed.', 'error');
