@@ -84,18 +84,25 @@ export class GreenCartService {
         };
       },
     };
+    let txQueue: Promise<unknown> = Promise.resolve();
     this.db = {
       ...ctx,
-      transaction: async <T>(fn: (tx: TxCtx) => Promise<T>): Promise<T> => {
-        this.sqlite.exec('BEGIN IMMEDIATE');
-        try {
-          const result = await fn(ctx);
-          this.sqlite.exec('COMMIT');
-          return result;
-        } catch (err) {
-          this.sqlite.exec('ROLLBACK');
-          throw err;
-        }
+      // Serialize transactions: one shared DatabaseSync connection cannot nest BEGIN across awaits.
+      transaction: <T>(fn: (tx: TxCtx) => Promise<T>): Promise<T> => {
+        const run = async (): Promise<T> => {
+          this.sqlite.exec('BEGIN IMMEDIATE');
+          try {
+            const result = await fn(ctx);
+            this.sqlite.exec('COMMIT');
+            return result;
+          } catch (err) {
+            this.sqlite.exec('ROLLBACK');
+            throw err;
+          }
+        };
+        const next = txQueue.then(run, run);
+        txQueue = next.catch(() => undefined);
+        return next;
       },
     };
   }
@@ -1237,6 +1244,10 @@ export class GreenCartService {
 
     const whereClause = isPersonal ? 'WHERE t.account_id = ?' : '';
     const params = isPersonal ? [actor.account_id] : [];
+    // Customers may see store-wide totals, but ledger rows (names, amounts, QR tokens) stay owner-scoped.
+    const isAdmin = actor.account_type === 'admin';
+    const ledgerWhere = isAdmin ? '' : 'WHERE t.account_id = ?';
+    const ledgerParams = isAdmin ? [] : [actor.account_id];
 
     const agg = await this.db.queryOne<{
       paperless_count: number;
@@ -1266,9 +1277,9 @@ export class GreenCartService {
        INNER JOIN transactions t ON t.transaction_id = ei.transaction_id
        INNER JOIN digital_receipts dr ON dr.transaction_id = t.transaction_id
        INNER JOIN accounts a ON a.account_id = t.account_id
-       ${whereClause}
+       ${ledgerWhere}
        ORDER BY t.transaction_date DESC, t.transaction_id DESC`,
-      params
+      ledgerParams
     );
 
     return {

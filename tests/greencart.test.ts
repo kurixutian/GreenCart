@@ -776,4 +776,42 @@ describe('GreenCart Minimum Test Matrix & 7-Entity Integrity', () => {
     expect(body.receipt.customer_username).toBe('verified_receipt');
     expect(body.receipt.items.length).toBeGreaterThan(0);
   });
+
+  it('keeps customer eco-impact ledger owner-scoped even when scope=store is requested', async () => {
+    const maria = await service.login('maria_santos', 'customer123');
+    const summary = await service.getEcoImpactSummary(maria, 'store');
+    const ownIds = new Set(
+      (db.prepare('SELECT transaction_id FROM transactions WHERE account_id = ?').all(maria.account_id) as Array<{ transaction_id: number }>).map((r) => r.transaction_id)
+    );
+    expect(summary.ledger.length).toBeGreaterThan(0);
+    expect(summary.ledger.every((row) => ownIds.has(row.transaction_id))).toBe(true);
+  });
+
+  it('survives malformed cookie encoding and rejects oversized JSON bodies', async () => {
+    const middleware = createApiMiddleware(db, 'test-secret');
+    const badCookie = await invokeMiddleware(middleware, {
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: { cookie: 'gc_session=%E0%A4%A' },
+    });
+    expect(badCookie.statusCode).toBe(200);
+
+    const huge = await invokeMiddleware(middleware, {
+      method: 'POST',
+      url: '/api/auth/login',
+      body: { username: 'x', password: 'a'.repeat(5 * 1024 * 1024) },
+    });
+    expect(huge.statusCode).toBe(413);
+  });
+
+  it('serializes concurrent transactions on the shared SQLite connection', async () => {
+    const admin = await service.login('admin_qcu', 'admin123');
+    const product = (db.prepare('SELECT product_id FROM inventory WHERE quantity > 10 LIMIT 1').get() as { product_id: number });
+    const before = (db.prepare('SELECT quantity FROM inventory WHERE product_id = ?').get(product.product_id) as { quantity: number }).quantity;
+    await Promise.all(
+      Array.from({ length: 5 }, () => service.adjustStock(admin, product.product_id, 1, 'concurrency test'))
+    );
+    const after = (db.prepare('SELECT quantity FROM inventory WHERE product_id = ?').get(product.product_id) as { quantity: number }).quantity;
+    expect(after).toBe(before + 5);
+  });
 });

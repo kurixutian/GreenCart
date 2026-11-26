@@ -39,8 +39,12 @@ function parseCookies(cookieHeader: string | undefined): Record<string, string> 
     const eqIdx = part.indexOf('=');
     if (eqIdx <= 0) continue;
     const key = part.slice(0, eqIdx).trim();
-    const val = decodeURIComponent(part.slice(eqIdx + 1).trim());
-    result[key] = val;
+    const rawVal = part.slice(eqIdx + 1).trim();
+    try {
+      result[key] = decodeURIComponent(rawVal);
+    } catch {
+      result[key] = rawVal;
+    }
   }
   return result;
 }
@@ -60,10 +64,20 @@ function verifyCsrfToken(sessionToken: string, candidate: string | undefined, se
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+// 4 MB covers the 2 MB base64 image upload (~2.7 MB encoded) plus JSON overhead.
+const MAX_JSON_BODY_BYTES = 4 * 1024 * 1024;
+
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
   const chunks: Buffer[] = [];
+  let total = 0;
   for await (const chunk of req) {
-    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+    const buf = typeof chunk === 'string' ? Buffer.from(chunk) : (chunk as Buffer);
+    total += buf.length;
+    if (total > MAX_JSON_BODY_BYTES) {
+      req.destroy();
+      throw new AppError(413, 'Request body too large.');
+    }
+    chunks.push(buf);
   }
   const raw = Buffer.concat(chunks).toString('utf8').trim();
   if (!raw) return {} as T;
